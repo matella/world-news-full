@@ -1,0 +1,83 @@
+name: Build & Deploy to k3s
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ai_service: ${{ steps.filter.outputs.ai_service }}
+      api_gateway: ${{ steps.filter.outputs.api_gateway }}
+      scraper: ${{ steps.filter.outputs.scraper }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            ai_service:
+              - 'backend/ai-service/**'
+            api_gateway:
+              - 'backend/api-gateway/**'
+            scraper:
+              - 'backend/scraper/**'
+
+  deploy-frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy frontend on server (SSH)
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_SSH_PORT }}
+          script: |
+            set -euo pipefail
+            REPO_DIR=${{ secrets.SERVER_REPO_DIR }}
+            if [ -d "$REPO_DIR" ]; then
+              cd "$REPO_DIR"
+              git fetch --all
+              git reset --hard origin/main
+            else
+              git clone https://github.com/${{ github.repository }} "$REPO_DIR"
+              cd "$REPO_DIR"
+            fi
+            # run the repository-local deploy script (will perform the build and k8s update)
+            ./scripts/deploy.sh frontend ${{ github.sha }}
+
+  deploy-ai-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ai_service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy AI service on server (SSH)
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_SSH_PORT }}
+          script: |
+            set -euo pipefail
+            REPO_DIR=${{ secrets.SERVER_REPO_DIR }}
+            if [ -d "$REPO_DIR" ]; then
+              cd "$REPO_DIR"
+              git fetch --all
+              git reset --hard origin/main
+            else
+              git clone https://github.com/${{ github.repository }} "$REPO_DIR"
+              cd "$REPO_DIR"
+            fi
+            ./scripts/deploy.sh ai-service ${{ github.sha }}
+
+  # You can add similar jobs for api_gateway and scraper if you want

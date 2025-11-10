@@ -1,0 +1,52 @@
+name: Build & Deploy on self-hosted runner
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ai_service: ${{ steps.filter.outputs.ai_service }}
+      api_gateway: ${{ steps.filter.outputs.api_gateway }}
+      scraper: ${{ steps.filter.outputs.scraper }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            ai_service:
+              - 'backend/ai-service/**'
+            api_gateway:
+              - 'backend/api-gateway/**'
+            scraper:
+              - 'backend/scraper/**'
+
+  deploy-frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: [ self-hosted, linux ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run deploy script (local runner)
+        run: |
+          chmod +x ./scripts/deploy.sh
+          ./scripts/deploy.sh frontend ${{ github.sha }}
+
+  deploy-ai-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ai_service == 'true'
+    runs-on: [ self-hosted, linux ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run deploy script (local runner)
+        run: |
+          chmod +x ./scripts/deploy.sh
+          ./scripts/deploy.sh ai-service ${{ github.sha }}
