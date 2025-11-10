@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: worldnews
+      POSTGRES_PASSWORD: worldnews
+      POSTGRES_DB: worldnews
+    ports:
+      - "5432:5432"
+    volumes:
+      - worldnews_pgdata:/var/lib/postgresql
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfiles/api.Dockerfile
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+
+  scraper:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfiles/scraper.Dockerfile
+    depends_on:
+      - postgres
+
+  ai-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfiles/ai.Dockerfile
+    ports:
+      - "9000:9000"
+
+  frontend:
+    image: node:24
+    working_dir: /usr/src/app/frontend
+    volumes:
+      - ../frontend:/usr/src/app/frontend
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+
+volumes:
+  worldnews_pgdata:

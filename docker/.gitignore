@@ -1,0 +1,16 @@
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+._*

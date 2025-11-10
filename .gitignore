@@ -1,0 +1,35 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.env
+.env.local
+
+# Node/Frontend
+node_modules/
+dist/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+
+# OS files
+.DS_Store
+.DS_Store?
+*.swp
+*.swo
+*~
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes

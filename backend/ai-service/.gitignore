@@ -1,0 +1,22 @@
+# Rust compilation artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+._*
+
+# Environment
+.env
+.env.local
