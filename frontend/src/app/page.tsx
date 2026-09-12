@@ -1,31 +1,28 @@
-"use client";
+// Front page = the latest edition (today, live). Past days live at /edition/[date]; all of them
+// are listed at /archive. Rendering is the shared <Edition> component.
+import { latestEditionDate, getEdition, adjacentEditions, resolveTheme } from "../lib/news";
+import Edition from "./Edition";
 
-import React, { useEffect, useState } from "react";
+export const dynamic = "force-dynamic";
 
-export default function Home() {
-  const [msg, setMsg] = useState("loading...");
-  useEffect(() => {
-    async function fetchHello() {
-      try {
-        const res = await fetch("http://localhost:8000/graphql", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: "{ hello }" }),
-        });
-        const data = await res.json();
-        setMsg(JSON.stringify(data));
-      } catch (e) {
-        setMsg("error: " + String(e));
-      }
-    }
-    fetchHello();
-  }, []);
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | undefined>>;
+}) {
+  const t = resolveTheme((searchParams ? await searchParams : {}) || {});
+  const date = await latestEditionDate();
+  const stories = date ? await getEdition(date) : [];
+  const adj = date ? await adjacentEditions(date) : { prev: null, next: null };
 
   return (
-    <main className="p-6 font-sans">
-      <h1 className="text-2xl font-bold">World News — Frontend</h1>
-      <p className="mt-4">GraphQL response:</p>
-      <pre className="mt-2 p-3 bg-gray-100 rounded">{msg}</pre>
-    </main>
+    <Edition
+      t={t}
+      stories={stories}
+      editionDate={date}
+      prev={adj.prev}
+      next={null}        /* the latest edition has no "Demain" */
+      isLatest
+    />
   );
 }

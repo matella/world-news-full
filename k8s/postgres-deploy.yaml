@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: world-news
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:18
+        env:
+        - name: POSTGRES_USER
+          value: "worldnews"
+        - name: POSTGRES_PASSWORD
+          value: "worldnews"
+        - name: POSTGRES_DB
+          value: "worldnews"
+        ports: [{ containerPort: 5432 }]
+        volumeMounts: [{ name: pgdata, mountPath: /var/lib/postgresql/data }]
+      volumes:
+      - name: pgdata
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: world-news
+spec:
+  ports: [{ port: 5432, targetPort: 5432 }]
+  selector: { app: postgres }
+  clusterIP: None

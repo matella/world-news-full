@@ -1,0 +1,4 @@
+- Replace <REGISTRY> with your image registry (Gitea registry or local registry).
+- For persistence, replace postgres emptyDir with a PVC.
+- To run scraper as Cron: create CronJob with schedule "0 * * * *" for hourly.
+- To deploy: kubectl apply -f k8s/namespace.yaml && kubectl apply -R -f k8s/

@@ -33,3 +33,6 @@ out/
 ._*
 .Spotlight-V100
 .Trashes
+
+# Sauvegardes locales
+*.bak

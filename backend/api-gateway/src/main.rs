@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(Extension(schema))
         .layer(add_cors_layer);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     info!("AI Service listening on {}", addr);
