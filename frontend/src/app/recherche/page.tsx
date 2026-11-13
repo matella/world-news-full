@@ -1,3 +1,4 @@
+import Link from "next/link";
 // Recherche plein-texte dans toutes les éditions (français). Indépendant de Jarvis : tsvector
 // sur la DB du site — pas d'embeddings nécessaires.
 import { searchStories, resolveTheme, rootVars, frDate, dispTitle, dispBody } from "../../lib/news";
@@ -48,7 +49,7 @@ export default async function Recherche({
           <div className="title">{t.masthead}</div>
           <div className="sub">Recherche dans les archives</div>
         </header>
-        <a className="back" href="/">‹ Revenir à l’édition du jour</a>
+        <Link className="back" href="/">‹ Revenir à l’édition du jour</Link>
 
         <form className="searchbox" action="/recherche" method="get">
           <input name="q" defaultValue={q} placeholder="Rechercher un sujet, un lieu, un nom…" autoFocus />

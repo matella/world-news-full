@@ -1,3 +1,4 @@
+import Link from "next/link";
 // Admin dashboard — visibility into the news pipeline: what's been scraped, pooled, synthesised and
 // published. Reads the site's own DB (status snapshot written by Jarvis + the published stories).
 import { getStatus, getAdminStories } from "../../lib/news";
@@ -55,7 +56,7 @@ export default async function Admin() {
       <div className="wrap">
         <div className="top">
           <h1>World News · pipeline admin</h1>
-          <a href="/">‹ Back to the edition</a>
+          <Link href="/">‹ Back to the edition</Link>
         </div>
 
         {down && (

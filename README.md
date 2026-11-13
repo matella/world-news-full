@@ -10,6 +10,10 @@
 > Coding agents must read [AGENTS.md](AGENTS.md) and
 > [project rules](gads/PROJECT.md). [GADS adoption](docs/gads-adoption.md)
 > is pinned and checked independently of application tests.
+> The transitional safety changes require explicit database configuration and
+> disable unconfigured admin access. Read the
+> [configuration/storage runbook](docs/operations/transitional-safety.md)
+> before running Compose or considering an existing-host upgrade.
 
 This repository contains a local development skeleton for the World News project.
 It runs entirely locally and anonymously (no authentication) and is intended for

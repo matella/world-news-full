@@ -4,10 +4,10 @@ services:
     image: postgres:18
     environment:
       POSTGRES_USER: worldnews
-      POSTGRES_PASSWORD: worldnews
+      POSTGRES_PASSWORD: ${WORLDNEWS_DB_PASSWORD:?Set WORLDNEWS_DB_PASSWORD}
       POSTGRES_DB: worldnews
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - worldnews_pgdata:/var/lib/postgresql
     restart: unless-stopped
@@ -17,9 +17,11 @@ services:
       context: ../frontend
     image: world-news-frontend
     environment:
-      DATABASE_URL: postgresql://worldnews:worldnews@postgres:5432/worldnews
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL with a URL-encoded password}
+      NEWS_ADMIN_USER: ${NEWS_ADMIN_USER:-}
+      NEWS_ADMIN_PASSWORD: ${NEWS_ADMIN_PASSWORD:-}
     ports:
-      - "3012:3000"
+      - "127.0.0.1:3012:3000"
     restart: unless-stopped
     depends_on:
       - postgres

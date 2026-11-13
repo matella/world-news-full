@@ -1,17 +1,16 @@
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::map_response;
 use axum::response::{IntoResponse, Response};
 use axum::{
+    Json, Router,
     extract::Extension,
     routing::{get, post},
-    Json, Router,
 };
 use serde_json::json;
 use std::net::SocketAddr;
 use tracing::info;
-use tracing_subscriber;
 
 struct QueryRoot;
 

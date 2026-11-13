@@ -1,8 +1,7 @@
+use anyhow::Result;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing_subscriber;
 use tracing::info;
-use anyhow::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {

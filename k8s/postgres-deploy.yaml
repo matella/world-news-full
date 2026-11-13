@@ -5,6 +5,8 @@ metadata:
   namespace: world-news
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector: { matchLabels: { app: postgres } }
   template:
     metadata: { labels: { app: postgres } }
@@ -16,14 +18,30 @@ spec:
         - name: POSTGRES_USER
           value: "worldnews"
         - name: POSTGRES_PASSWORD
-          value: "worldnews"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: password
         - name: POSTGRES_DB
           value: "worldnews"
         ports: [{ containerPort: 5432 }]
-        volumeMounts: [{ name: pgdata, mountPath: /var/lib/postgresql/data }]
+        # Postgres 18 keeps versioned PGDATA under this parent directory.
+        volumeMounts: [{ name: pgdata, mountPath: /var/lib/postgresql }]
       volumes:
       - name: pgdata
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: postgres-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: world-news
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
 ---
 apiVersion: v1
 kind: Service

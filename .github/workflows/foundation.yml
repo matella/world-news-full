@@ -19,7 +19,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Check installed policies and fixtures offline
-        run: python3 scripts/check_foundation.py
+        run: |
+          python3 scripts/check_foundation.py
+          if [ -f scripts/check_secrets.py ]; then python3 scripts/check_secrets.py; fi
       - name: Checkout reviewed upstream GADS
         uses: actions/checkout@v4
         with:

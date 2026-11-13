@@ -1,11 +1,5 @@
 // Shared data + theme for the World News site. Reads the site's OWN Postgres (published by Jarvis).
-import { Pool } from "pg";
-
-const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    "postgresql://worldnews:worldnews@postgres:5432/worldnews",
-});
+import { query } from "./database";
 
 export type Claim = { claim: string; sources: number[] };
 export type Disagreement = { point: string; positions: string[] };
@@ -50,57 +44,41 @@ export function dispBody(s: Story) {
 }
 
 export async function getStories(): Promise<Story[]> {
-  try {
-    const { rows } = await pool.query(
-      `SELECT ${COLS} FROM published_stories ORDER BY origin_count DESC, updated_at DESC LIMIT 40`
-    );
-    return rows as Story[];
-  } catch {
-    return [];
-  }
+  const { rows } = await query("getStories",
+    `SELECT ${COLS} FROM published_stories ORDER BY origin_count DESC, updated_at DESC LIMIT 40`
+  );
+  return rows as Story[];
 }
 
 // ── Editions (day-by-day archive) ──
 export async function latestEditionDate(): Promise<string | null> {
-  try {
-    const { rows } = await pool.query(
-      "SELECT to_char(max(edition_date),'YYYY-MM-DD') AS d FROM published_stories"
-    );
-    return rows[0]?.d ?? null;
-  } catch {
-    return null;
-  }
+  const { rows } = await query("latestEditionDate",
+    "SELECT to_char(max(edition_date),'YYYY-MM-DD') AS d FROM published_stories"
+  );
+  return rows[0]?.d ?? null;
 }
 
 // One day's edition — most-covered first (the lead), then recency.
 export async function getEdition(date: string): Promise<Story[]> {
-  try {
-    const { rows } = await pool.query(
-      `SELECT ${COLS} FROM published_stories WHERE edition_date = $1 ` +
-        "ORDER BY origin_count DESC, updated_at DESC",
-      [date]
-    );
-    return rows as Story[];
-  } catch {
-    return [];
-  }
+  const { rows } = await query("getEdition",
+    `SELECT ${COLS} FROM published_stories WHERE edition_date = $1 ` +
+      "ORDER BY origin_count DESC, updated_at DESC",
+    [date]
+  );
+  return rows as Story[];
 }
 
 // The adjacent NON-EMPTY editions (skips days with no edition), for ‹ Hier / Demain ›.
 export async function adjacentEditions(
   date: string
 ): Promise<{ prev: string | null; next: string | null }> {
-  try {
-    const { rows } = await pool.query(
-      "SELECT to_char(max(edition_date) FILTER (WHERE edition_date < $1),'YYYY-MM-DD') AS prev, " +
-        "to_char(min(edition_date) FILTER (WHERE edition_date > $1),'YYYY-MM-DD') AS next " +
-        "FROM published_stories",
-      [date]
-    );
-    return { prev: rows[0]?.prev ?? null, next: rows[0]?.next ?? null };
-  } catch {
-    return { prev: null, next: null };
-  }
+  const { rows } = await query("adjacentEditions",
+    "SELECT to_char(max(edition_date) FILTER (WHERE edition_date < $1),'YYYY-MM-DD') AS prev, " +
+      "to_char(min(edition_date) FILTER (WHERE edition_date > $1),'YYYY-MM-DD') AS next " +
+      "FROM published_stories",
+    [date]
+  );
+  return { prev: rows[0]?.prev ?? null, next: rows[0]?.next ?? null };
 }
 
 // The "subject thread": the current story + its related stories, oldest→newest — how the subject
@@ -116,89 +94,73 @@ export type ThreadEntry = {
 export async function getThread(story: Story): Promise<ThreadEntry[]> {
   const ids = story.related_ids || [];
   if (!ids.length) return [];
-  try {
-    const { rows } = await pool.query(
-      "SELECT id, COALESCE(NULLIF(title_fr,''), title) AS title, " +
-        "to_char(edition_date,'YYYY-MM-DD') AS edition_date, origin_count " +
-        "FROM published_stories WHERE id = ANY($1)",
-      [ids]
-    );
-    const entries: ThreadEntry[] = rows.map((r) => ({ ...r, current: false }) as ThreadEntry);
-    entries.push({
-      id: story.id, title: dispTitle(story), edition_date: story.edition_date,
-      origin_count: story.origin_count, current: true,
-    });
-    entries.sort((a, b) => a.edition_date.localeCompare(b.edition_date));
-    return entries;
-  } catch {
-    return [];
-  }
+  const { rows } = await query("getThread",
+    "SELECT id, COALESCE(NULLIF(title_fr,''), title) AS title, " +
+      "to_char(edition_date,'YYYY-MM-DD') AS edition_date, origin_count " +
+      "FROM published_stories WHERE id = ANY($1)",
+    [ids]
+  );
+  const entries: ThreadEntry[] = rows.map((r) => ({ ...r, current: false }) as ThreadEntry);
+  entries.push({
+    id: story.id, title: dispTitle(story), edition_date: story.edition_date,
+    origin_count: story.origin_count, current: true,
+  });
+  entries.sort((a, b) => a.edition_date.localeCompare(b.edition_date));
+  return entries;
 }
 
 // Full-text search over the archive (French config; falls back to plain ILIKE on no hits).
 export async function searchStories(q: string): Promise<Story[]> {
   if (!q.trim()) return [];
-  try {
-    const { rows } = await pool.query(
-      `SELECT ${COLS} FROM published_stories ` +
-        "WHERE to_tsvector('french', coalesce(title_fr,'') || ' ' || coalesce(body_fr,'') || ' ' " +
-        "|| title || ' ' || body) @@ plainto_tsquery('french', $1) " +
-        "ORDER BY edition_date DESC NULLS LAST, origin_count DESC LIMIT 30",
-      [q.trim()]
-    );
-    if (rows.length) return rows as Story[];
-    const like = await pool.query(
-      `SELECT ${COLS} FROM published_stories WHERE title_fr ILIKE $1 OR title ILIKE $1 ` +
-        "ORDER BY edition_date DESC NULLS LAST LIMIT 30",
-      ["%" + q.trim() + "%"]
-    );
-    return like.rows as Story[];
-  } catch {
-    return [];
-  }
+  const { rows } = await query("searchStories",
+    `SELECT ${COLS} FROM published_stories ` +
+      "WHERE to_tsvector('french', coalesce(title_fr,'') || ' ' || coalesce(body_fr,'') || ' ' " +
+      "|| title || ' ' || body) @@ plainto_tsquery('french', $1) " +
+      "ORDER BY edition_date DESC NULLS LAST, origin_count DESC LIMIT 30",
+    [q.trim()]
+  );
+  if (rows.length) return rows as Story[];
+  const like = await query("searchStories",
+    `SELECT ${COLS} FROM published_stories WHERE title_fr ILIKE $1 OR title ILIKE $1 ` +
+      "ORDER BY edition_date DESC NULLS LAST LIMIT 30",
+    ["%" + q.trim() + "%"]
+  );
+  return like.rows as Story[];
 }
 
 // Active multi-day threads ("sujets suivis"): recent stories whose related_ids span other days.
 export type ThreadHead = { id: string; title: string; edition_date: string; days: number };
 export async function activeThreads(limit = 12): Promise<ThreadHead[]> {
-  try {
-    const { rows } = await pool.query(
-      "SELECT p.id, COALESCE(NULLIF(p.title_fr,''), p.title) AS title, " +
-        "to_char(p.edition_date,'YYYY-MM-DD') AS edition_date, " +
-        "(SELECT count(DISTINCT r.edition_date) FROM published_stories r " +
-        " WHERE r.id = ANY(p.related_ids) OR r.id = p.id)::int AS days " +
-        "FROM published_stories p " +
-        "WHERE EXISTS (SELECT 1 FROM published_stories r WHERE r.id = ANY(p.related_ids) " +
-        "              AND r.edition_date <> p.edition_date) " +
-        "ORDER BY p.edition_date DESC, p.origin_count DESC LIMIT $1",
-      [limit]
-    );
-    // garde une tête par fil : si deux têtes partagent des related, la plus récente gagne
-    const seen = new Set<string>();
-    const heads: ThreadHead[] = [];
-    for (const r of rows as (ThreadHead & { id: string })[]) {
-      if (seen.has(r.id)) continue;
-      seen.add(r.id);
-      heads.push(r);
-    }
-    return heads;
-  } catch {
-    return [];
+  const { rows } = await query("activeThreads",
+    "SELECT p.id, COALESCE(NULLIF(p.title_fr,''), p.title) AS title, " +
+      "to_char(p.edition_date,'YYYY-MM-DD') AS edition_date, " +
+      "(SELECT count(DISTINCT r.edition_date) FROM published_stories r " +
+      " WHERE r.id = ANY(p.related_ids) OR r.id = p.id)::int AS days " +
+      "FROM published_stories p " +
+      "WHERE EXISTS (SELECT 1 FROM published_stories r WHERE r.id = ANY(p.related_ids) " +
+      "              AND r.edition_date <> p.edition_date) " +
+      "ORDER BY p.edition_date DESC, p.origin_count DESC LIMIT $1",
+    [limit]
+  );
+  // garde une tête par fil : si deux têtes partagent des related, la plus récente gagne
+  const seen = new Set<string>();
+  const heads: ThreadHead[] = [];
+  for (const r of rows as (ThreadHead & { id: string })[]) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    heads.push(r);
   }
+  return heads;
 }
 
 // Every edition (newest first) with its story count — the archive index.
 export async function editionDates(): Promise<{ date: string; count: number }[]> {
-  try {
-    const { rows } = await pool.query(
-      "SELECT to_char(edition_date,'YYYY-MM-DD') AS date, count(*)::int AS count " +
-        "FROM published_stories WHERE edition_date IS NOT NULL " +
-        "GROUP BY edition_date ORDER BY edition_date DESC"
-    );
-    return rows as { date: string; count: number }[];
-  } catch {
-    return [];
-  }
+  const { rows } = await query("editionDates",
+    "SELECT to_char(edition_date,'YYYY-MM-DD') AS date, count(*)::int AS count " +
+      "FROM published_stories WHERE edition_date IS NOT NULL " +
+      "GROUP BY edition_date ORDER BY edition_date DESC"
+  );
+  return rows as { date: string; count: number }[];
 }
 
 export type Status = {
@@ -221,37 +183,25 @@ export type Status = {
 };
 
 export async function getStatus(): Promise<Status | null> {
-  try {
-    const { rows } = await pool.query(
-      "SELECT stats, updated_at FROM news_status WHERE id = 1"
-    );
-    return (rows[0] as Status) ?? null;
-  } catch {
-    return null;
-  }
+  const { rows } = await query("getStatus",
+    "SELECT stats, updated_at FROM news_status WHERE id = 1"
+  );
+  return (rows[0] as Status) ?? null;
 }
 
 export async function getAdminStories(): Promise<Story[]> {
-  try {
-    const { rows } = await pool.query(
-      `SELECT ${COLS} FROM published_stories ORDER BY updated_at DESC LIMIT 200`
-    );
-    return rows as Story[];
-  } catch {
-    return [];
-  }
+  const { rows } = await query("getAdminStories",
+    `SELECT ${COLS} FROM published_stories ORDER BY updated_at DESC LIMIT 200`
+  );
+  return rows as Story[];
 }
 
 export async function getStory(id: string): Promise<Story | null> {
-  try {
-    const { rows } = await pool.query(
-      `SELECT ${COLS} FROM published_stories WHERE id = $1`,
-      [id]
-    );
-    return (rows[0] as Story) ?? null;
-  } catch {
-    return null;
-  }
+  const { rows } = await query("getStory",
+    `SELECT ${COLS} FROM published_stories WHERE id = $1`,
+    [id]
+  );
+  return (rows[0] as Story) ?? null;
 }
 
 export function byline(s: Story) {

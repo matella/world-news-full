@@ -1,3 +1,4 @@
+import Link from "next/link";
 // The archive index — every edition ever published, grouped by month, newest first. Jump to any day.
 import { editionDates, resolveTheme, rootVars, frDate } from "../../lib/news";
 
@@ -54,7 +55,7 @@ export default async function Archive({
           <div className="title">{t.masthead}</div>
           <div className="sub">Toutes les éditions</div>
         </header>
-        <a className="back" href="/">‹ Revenir à l’édition du jour</a>
+        <Link className="back" href="/">‹ Revenir à l’édition du jour</Link>
 
         {eds.length === 0 && <p className="empty">Aucune édition archivée pour l’instant.</p>}
 

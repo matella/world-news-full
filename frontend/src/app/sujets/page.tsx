@@ -1,3 +1,4 @@
+import Link from "next/link";
 // « Sujets suivis » — les fils qui courent sur plusieurs éditions (la timeline vue d'ensemble).
 // Une tête de fil = l'article le plus récent d'un sujet dont le fil traverse plusieurs jours.
 import { activeThreads, resolveTheme, rootVars, frDate } from "../../lib/news";
@@ -40,7 +41,7 @@ export default async function Sujets({
           <div className="title">{t.masthead}</div>
           <div className="sub">Sujets suivis</div>
         </header>
-        <a className="back" href="/">‹ Revenir à l’édition du jour</a>
+        <Link className="back" href="/">‹ Revenir à l’édition du jour</Link>
         <p className="lead-note">
           Les histoires qui courent sur plusieurs éditions — ouvrez-en une pour suivre le fil jour par jour.
         </p>

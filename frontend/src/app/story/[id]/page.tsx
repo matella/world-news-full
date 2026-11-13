@@ -4,6 +4,8 @@ import {
   getStory, getThread, jarvisAskUrl, resolveTheme, rootVars, dispTitle, dispBody, frDate,
 } from "../../../lib/news";
 import StoryReader from "./StoryReader";
+import { notFound } from "next/navigation";
+import { validStoryId } from "../../../lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -61,8 +63,10 @@ export default async function StoryPage({
   searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  if (!validStoryId(id)) notFound();
   const t = resolveTheme((searchParams ? await searchParams : {}) || {});
   const s = await getStory(id);
+  if (!s) notFound();
   const thread = s ? await getThread(s) : [];
 
   return (
