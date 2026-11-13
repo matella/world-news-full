@@ -1,0 +1,514 @@
+//! Explicit, session-authorised editorial transactions. No automatic publishing.
+use crate::{
+    auth::{self, Permission, Principal, Session},
+    content::*,
+    error::AppError,
+    persistence,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, Postgres, Transaction, types::Json};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PublicState {
+    Draft,
+    InReview,
+    Published,
+    Withdrawn,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewState {
+    Draft,
+    InReview,
+    Approved,
+    ChangesRequested,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReviewOutcome {
+    Approved,
+    ChangesRequested,
+}
+impl ReviewOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Approved => "approved",
+            Self::ChangesRequested => "changes_requested",
+        }
+    }
+}
+#[derive(Debug)]
+pub struct Head {
+    pub id: String,
+    pub public_state: PublicState,
+    pub review_state: ReviewState,
+    pub current_revision_id: String,
+    pub published_revision_id: Option<String>,
+    pub lock_version: i64,
+}
+#[derive(sqlx::FromRow)]
+struct RawHead {
+    id: String,
+    state: String,
+    review_state: String,
+    current_revision_id: Option<String>,
+    published_revision_id: Option<String>,
+    lock_version: i64,
+}
+impl TryFrom<RawHead> for Head {
+    type Error = AppError;
+    fn try_from(raw: RawHead) -> Result<Self, AppError> {
+        let parse = |value: String| serde_json::Value::String(value);
+        let public_state: PublicState =
+            serde_json::from_value(parse(raw.state)).map_err(|_| AppError::InvalidData)?;
+        let review_state =
+            serde_json::from_value(parse(raw.review_state)).map_err(|_| AppError::InvalidData)?;
+        let current_revision_id = raw
+            .current_revision_id
+            .filter(|id| valid_id(id))
+            .ok_or(AppError::InvalidData)?;
+        if !valid_id(&raw.id)
+            || raw.lock_version < 0
+            || raw
+                .published_revision_id
+                .as_ref()
+                .is_some_and(|id| !valid_id(id))
+            || matches!(
+                public_state,
+                PublicState::Published | PublicState::Withdrawn
+            ) != raw.published_revision_id.is_some()
+        {
+            return Err(AppError::InvalidData);
+        }
+        Ok(Self {
+            id: raw.id,
+            public_state,
+            review_state,
+            current_revision_id,
+            published_revision_id: raw.published_revision_id,
+            lock_version: raw.lock_version,
+        })
+    }
+}
+#[derive(Clone)]
+pub struct RevisionInput {
+    pub title: String,
+    pub standfirst: Option<String>,
+    pub summary: Option<String>,
+    pub body: Vec<ContentBlock>,
+    pub language: String,
+    pub format: ArticleFormat,
+    pub kind: ArticleKind,
+    pub topics: Vec<String>,
+    pub geography: Vec<String>,
+    pub reason: String,
+}
+impl RevisionInput {
+    fn validate(&self) -> Result<(), AppError> {
+        let metadata =
+            |values: &[String]| values.len() <= 20 && values.iter().all(|v| text(v, 100));
+        if !text(&self.title, 500)
+            || self.title.chars().any(char::is_control)
+            || !valid_language(&self.language)
+            || !validate_blocks(&self.body)
+            || self.standfirst.as_ref().is_some_and(|s| !text(s, 1000))
+            || self.summary.as_ref().is_some_and(|s| !text(s, 3000))
+            || !metadata(&self.topics)
+            || !metadata(&self.geography)
+            || !text(&self.reason, 2000)
+            || matches!(
+                self.kind,
+                ArticleKind::LegacySummary | ArticleKind::LegacySynthesis
+            )
+        {
+            return Err(AppError::Validation(
+                "Invalid revision content or change reason.",
+            ));
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, sqlx::FromRow)]
+pub struct RevisionRecord {
+    pub id: String,
+    pub number: i32,
+    pub actor_id: String,
+    pub title: String,
+    pub change_reason: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+#[derive(Clone)]
+pub struct EditorialService {
+    pool: PgPool,
+}
+impl EditorialService {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+    async fn begin(
+        &self,
+        session: &Session,
+        permission: Permission,
+    ) -> Result<(Transaction<'static, Postgres>, Principal), AppError> {
+        if !persistence::schema_available(&self.pool).await {
+            return Err(AppError::Unavailable);
+        }
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| AppError::database("editorial_begin", e))?;
+        match auth::live_principal(&mut tx, session, permission).await {
+            Ok(principal) => Ok((tx, principal)),
+            Err(error) => {
+                let _ = tx.rollback().await;
+                if error == AppError::Forbidden {
+                    auth::record_service_denial(&self.pool, session).await?;
+                }
+                Err(error)
+            }
+        }
+    }
+    pub async fn create(
+        &self,
+        session: &Session,
+        id: &str,
+        input: RevisionInput,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        input.validate()?;
+        let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
+        sqlx::query("INSERT INTO news.stories(id) VALUES ($1)")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::database("editorial_create", e))?;
+        let revision = insert_revision(&mut tx, id, &actor, input).await?;
+        sqlx::query("UPDATE news.stories SET current_revision_id=$2,lock_version=1,updated_at=now() WHERE id=$1").bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_create_head",e))?;
+        action(
+            &mut tx,
+            id,
+            &revision,
+            &actor,
+            "created",
+            "Initial draft created.",
+            1,
+        )
+        .await?;
+        let head = load_head(&mut tx, id, None).await?;
+        tx.commit()
+            .await
+            .map_err(|e| AppError::database("editorial_commit", e))?;
+        Ok(head)
+    }
+    pub async fn revise(
+        &self,
+        session: &Session,
+        id: &str,
+        expected: i64,
+        input: RevisionInput,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        input.validate()?;
+        let reason = input.reason.clone();
+        let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
+        let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.public_state == PublicState::Withdrawn {
+            return Err(AppError::Conflict);
+        }
+        let revision = insert_revision(&mut tx, id, &actor, input).await?;
+        sqlx::query("UPDATE news.stories SET current_revision_id=$2,review_state='draft',state=CASE WHEN published_revision_id IS NULL THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
+            .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_revise",e))?;
+        finish(tx, &head, &revision, &actor, "revised", &reason).await
+    }
+    pub async fn submit(
+        &self,
+        session: &Session,
+        id: &str,
+        expected: i64,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
+        let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.public_state == PublicState::Withdrawn
+            || !matches!(
+                head.review_state,
+                ReviewState::Draft | ReviewState::ChangesRequested
+            )
+            || head.published_revision_id.as_deref() == Some(&head.current_revision_id)
+        {
+            return Err(AppError::Conflict);
+        }
+        let revision = load_revision(&mut tx, &head.current_revision_id).await?;
+        if !revision.body.iter().any(|b| match b {
+            ContentBlock::Paragraph { text } | ContentBlock::Heading { text, .. } => {
+                !text.trim().is_empty()
+            }
+        }) {
+            return Err(AppError::Validation(
+                "Review requires a nonempty article body.",
+            ));
+        }
+        sqlx::query("UPDATE news.stories SET review_state='in_review',state=CASE WHEN published_revision_id IS NULL THEN 'in_review' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
+            .bind(id).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_submit",e))?;
+        finish(
+            tx,
+            &head,
+            &head.current_revision_id,
+            &actor,
+            "submitted",
+            "Submitted for editorial review.",
+        )
+        .await
+    }
+    pub async fn review(
+        &self,
+        session: &Session,
+        id: &str,
+        expected: i64,
+        outcome: ReviewOutcome,
+        note: Option<&str>,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        if note.is_some_and(|v| !text(v, 10000))
+            || (outcome == ReviewOutcome::ChangesRequested && note.is_none())
+        {
+            return Err(AppError::Validation(
+                "A valid internal review note is required for requested changes.",
+            ));
+        }
+        let (mut tx, actor) = self.begin(session, Permission::Publish).await?;
+        let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.public_state == PublicState::Withdrawn || head.review_state != ReviewState::InReview
+        {
+            return Err(AppError::Conflict);
+        }
+        sqlx::query("INSERT INTO news.editorial_reviews(revision_id,actor_id,outcome,internal_note) VALUES ($1,$2,$3,$4)")
+            .bind(&head.current_revision_id).bind(actor.id()).bind(outcome.as_str()).bind(note).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_review",e))?;
+        sqlx::query("UPDATE news.stories SET review_state=$2,state=CASE WHEN published_revision_id IS NULL AND $2='changes_requested' THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
+            .bind(id).bind(outcome.as_str()).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_review_head",e))?;
+        finish(
+            tx,
+            &head,
+            &head.current_revision_id,
+            &actor,
+            outcome.as_str(),
+            "Editorial review recorded; see private review note.",
+        )
+        .await
+    }
+    pub async fn publish(
+        &self,
+        session: &Session,
+        id: &str,
+        expected: i64,
+        public_reason: &str,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        check_reason(public_reason)?;
+        let (mut tx, actor) = self.begin(session, Permission::Publish).await?;
+        let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.public_state == PublicState::Withdrawn
+            || head.review_state != ReviewState::Approved
+            || head.published_revision_id.as_deref() == Some(&head.current_revision_id)
+        {
+            return Err(AppError::Conflict);
+        }
+        let approved=sqlx::query_scalar::<_,String>("SELECT outcome FROM news.editorial_reviews WHERE revision_id=$1 ORDER BY id DESC LIMIT 1")
+            .bind(&head.current_revision_id).fetch_optional(&mut *tx).await.map_err(|e|AppError::database("editorial_approval",e))?;
+        if approved.as_deref() != Some("approved") {
+            return Err(AppError::Conflict);
+        }
+        let action = if head.published_revision_id.is_some() {
+            "corrected"
+        } else {
+            "published"
+        };
+        publication_event(
+            &mut tx,
+            &head.id,
+            &head.current_revision_id,
+            &actor,
+            action,
+            public_reason,
+        )
+        .await?;
+        sqlx::query("UPDATE news.stories SET state='published',published_revision_id=current_revision_id,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
+            .bind(id).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_publish",e))?;
+        finish(
+            tx,
+            &head,
+            &head.current_revision_id,
+            &actor,
+            action,
+            public_reason,
+        )
+        .await
+    }
+    pub async fn withdraw(
+        &self,
+        session: &Session,
+        id: &str,
+        expected: i64,
+        public_reason: &str,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        check_reason(public_reason)?;
+        let (mut tx, actor) = self.begin(session, Permission::Publish).await?;
+        let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.public_state != PublicState::Published {
+            return Err(AppError::Conflict);
+        }
+        let revision = head
+            .published_revision_id
+            .as_ref()
+            .ok_or(AppError::InvalidData)?;
+        publication_event(&mut tx, id, revision, &actor, "withdrawn", public_reason).await?;
+        sqlx::query("UPDATE news.stories SET state='withdrawn',lock_version=lock_version+1,updated_at=now() WHERE id=$1")
+            .bind(id).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_withdraw",e))?;
+        finish(tx, &head, revision, &actor, "withdrawn", public_reason).await
+    }
+    pub async fn head(&self, session: &Session, id: &str) -> Result<Head, AppError> {
+        check_id(id)?;
+        let (mut tx, _) = self.begin(session, Permission::Edit).await?;
+        let head = load_head(&mut tx, id, None).await?;
+        tx.commit()
+            .await
+            .map_err(|e| AppError::database("editorial_read", e))?;
+        Ok(head)
+    }
+    pub async fn revision(&self, session: &Session, id: &str) -> Result<Revision, AppError> {
+        check_id(id)?;
+        let (mut tx, _) = self.begin(session, Permission::Edit).await?;
+        let revision = load_revision(&mut tx, id).await?;
+        tx.commit()
+            .await
+            .map_err(|e| AppError::database("editorial_read", e))?;
+        Ok(revision)
+    }
+    /// Metadata only, at most 20 revisions. before_number is an exclusive cursor.
+    pub async fn history(
+        &self,
+        session: &Session,
+        id: &str,
+        before_number: Option<i32>,
+    ) -> Result<Vec<RevisionRecord>, AppError> {
+        check_id(id)?;
+        if before_number.is_some_and(|n| n <= 0) {
+            return Err(AppError::Validation("Invalid history cursor."));
+        }
+        let (mut tx, _) = self.begin(session, Permission::Edit).await?;
+        let _ = load_head(&mut tx, id, None).await?;
+        let rows=sqlx::query_as::<_,RevisionRecord>("SELECT id,number,actor_id,title,change_reason,created_at FROM news.story_revisions WHERE story_id=$1 AND ($2::int IS NULL OR number<$2) ORDER BY number DESC LIMIT 20")
+            .bind(id).bind(before_number).fetch_all(&mut *tx).await.map_err(|e|AppError::database("editorial_history",e))?;
+        if rows.iter().any(|r| {
+            !valid_id(&r.id) || !valid_id(&r.actor_id) || r.number <= 0 || !text(&r.title, 500)
+        }) {
+            return Err(AppError::InvalidData);
+        }
+        tx.commit()
+            .await
+            .map_err(|e| AppError::database("editorial_read", e))?;
+        Ok(rows)
+    }
+}
+fn text(value: &str, max: usize) -> bool {
+    !value.trim().is_empty() && value.chars().count() <= max && !value.contains('\0')
+}
+fn check_id(id: &str) -> Result<(), AppError> {
+    if valid_id(id) {
+        Ok(())
+    } else {
+        Err(AppError::Validation("Invalid story or revision ID."))
+    }
+}
+fn check_reason(reason: &str) -> Result<(), AppError> {
+    if text(reason, 2000) {
+        Ok(())
+    } else {
+        Err(AppError::Validation(
+            "A nonempty public reason of at most 2000 characters is required.",
+        ))
+    }
+}
+async fn load_head(
+    tx: &mut Transaction<'_, Postgres>,
+    id: &str,
+    expected: Option<i64>,
+) -> Result<Head, AppError> {
+    let head:Head=sqlx::query_as::<_,RawHead>("SELECT id,state,review_state,current_revision_id,published_revision_id,lock_version FROM news.stories WHERE id=$1 FOR UPDATE")
+        .bind(id).fetch_optional(&mut **tx).await.map_err(|e|AppError::database("editorial_head",e))?.ok_or(AppError::NotFound)?.try_into()?;
+    if expected.is_some_and(|version| version != head.lock_version) {
+        return Err(AppError::Conflict);
+    }
+    Ok(head)
+}
+async fn load_revision(tx: &mut Transaction<'_, Postgres>, id: &str) -> Result<Revision, AppError> {
+    sqlx::query_as::<_, RawRevision>("SELECT * FROM news.story_revisions WHERE id=$1")
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| AppError::database("editorial_revision", e))?
+        .ok_or(AppError::NotFound)?
+        .try_into()
+}
+async fn insert_revision(
+    tx: &mut Transaction<'_, Postgres>,
+    id: &str,
+    actor: &Principal,
+    input: RevisionInput,
+) -> Result<String, AppError> {
+    sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT $1,COALESCE(MAX(number),0)+1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'{\"workflow\":\"editorial\",\"origin\":\"manual_submission\"}'::jsonb FROM news.story_revisions WHERE story_id=$1 RETURNING id")
+        .bind(id).bind(input.title).bind(input.standfirst).bind(input.summary).bind(Json(input.body)).bind(input.language).bind(input.format.as_str()).bind(input.kind.as_str()).bind(input.topics).bind(input.geography).bind(actor.id()).bind(input.reason)
+        .fetch_one(&mut **tx).await.map_err(|e|AppError::database("editorial_save_revision",e))
+}
+async fn action(
+    tx: &mut Transaction<'_, Postgres>,
+    id: &str,
+    revision: &str,
+    actor: &Principal,
+    action: &str,
+    reason: &str,
+    version: i64,
+) -> Result<(), AppError> {
+    sqlx::query("INSERT INTO news.editorial_actions(story_id,revision_id,actor_id,action,reason,lock_version) VALUES ($1,$2,$3,$4,$5,$6)")
+        .bind(id).bind(revision).bind(actor.id()).bind(action).bind(reason).bind(version).execute(&mut **tx).await.map_err(|e|AppError::database("editorial_action",e))?;
+    Ok(())
+}
+async fn publication_event(
+    tx: &mut Transaction<'_, Postgres>,
+    id: &str,
+    revision: &str,
+    actor: &Principal,
+    action: &str,
+    reason: &str,
+) -> Result<(), AppError> {
+    sqlx::query("INSERT INTO news.publication_events(story_id,revision_id,action,public_reason,actor_id) VALUES ($1,$2,$3,$4,$5)")
+        .bind(id).bind(revision).bind(action).bind(reason).bind(actor.id()).execute(&mut **tx).await.map_err(|e|AppError::database("editorial_publication_event",e))?;
+    Ok(())
+}
+async fn finish(
+    mut tx: Transaction<'static, Postgres>,
+    head: &Head,
+    revision: &str,
+    actor: &Principal,
+    verb: &str,
+    reason: &str,
+) -> Result<Head, AppError> {
+    let updated = load_head(&mut tx, &head.id, None).await?;
+    action(
+        &mut tx,
+        &head.id,
+        revision,
+        actor,
+        verb,
+        reason,
+        updated.lock_version,
+    )
+    .await?;
+    tx.commit()
+        .await
+        .map_err(|e| AppError::database("editorial_commit", e))?;
+    Ok(updated)
+}

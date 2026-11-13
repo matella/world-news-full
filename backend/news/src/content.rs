@@ -41,9 +41,12 @@ pub fn validate_blocks(blocks: &[ContentBlock]) -> bool {
     bytes <= 1_048_576
         && blocks.len() <= 2000
         && blocks.iter().all(|block| match block {
-            ContentBlock::Paragraph { text } => text.len() <= 1_048_576,
+            ContentBlock::Paragraph { text } => text.len() <= 1_048_576 && !text.contains('\0'),
             ContentBlock::Heading { text, level } => {
-                (2..=3).contains(level) && !text.trim().is_empty() && text.chars().count() <= 500
+                (2..=3).contains(level)
+                    && !text.trim().is_empty()
+                    && text.chars().count() <= 500
+                    && !text.contains('\0')
             }
         })
 }

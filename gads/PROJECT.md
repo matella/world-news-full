@@ -13,6 +13,11 @@ Preserve IDs, source links, languages and archive data; imported schema is unkno
 until inspected. Do not invent migrations from TypeScript casts.
 
 Public reading is anonymous. Admin/writes require server-side authorisation.
+Editorial services revalidate a live session/role inside each transaction; never
+trust a caller-provided actor or a cached role for a privileged state transition.
+Any revision change invalidates review. Future citation/length changes must also
+invalidate the affected approval or create a new reviewable revision. Do not expose
+a production publishing endpoint before citation/length/editor acceptance is met.
 Intake/AI -> draft -> review -> publication. No automatic publication. Preserve
 revision/provenance and transparent corrections. Configurable article budgets live
 in `config/editorial.json`; do not pad or truncate to hit them. Treat feeds/text as
