@@ -195,5 +195,16 @@ recovery. Normalizer output and job success commit together; cancellation/expiry
 cannot authorize stale content writes. Run `world-news --work-normalization-once`
 explicitly with a restricted worker DB role; it never starts fetching or publishing.
 See [operations](../../docs/normalization-jobs.md) and
-[ADR 0009](../../docs/architecture/0009-durable-normalization-jobs.md). Fetch recovery,
-machine extraction authority and daemon scheduling remain open gates in #21.
+[ADR 0009](../../docs/architecture/0009-durable-normalization-jobs.md). Feed recovery advances in the next section; machine extraction authority and daemon
+scheduling remain open gates in #21.
+
+## Feed recovery and handoff
+
+Feed attempts now have live ownership deadlines, explicit bounded abandoned-work
+recovery, five-failure holds and publisher-authorized pause/resume. A modified
+feed's metadata/cache/normalization job and machine parent link commit atomically.
+`world-news --poll-feed-once ID` can fetch one selected configured source;
+`world-news --recover-feed-leases-once` performs bookkeeping with no HTTP. Neither
+starts a scheduler. See [operations](../../docs/feed-recovery.md) and
+[ADR 0010](../../docs/architecture/0010-durable-feed-recovery.md). Machine extraction
+authority/orchestration and protected operator UI remain separate #21/#22 gates.

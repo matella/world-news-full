@@ -13,7 +13,7 @@ as defaults. Public reading remains independent of intake availability.
   data: no embedded instructions execute, and nothing creates a story/draft.
 - FeedPoller::poll_due(feed_id) reserves an enabled, unpaused due feed and records
   its attempt. Outcomes: Disabled, Paused, NotDue, Cancelled, Unchanged, Modified
-  or Failed. They are distinct from DB/config errors, which return AppError.
+  or Failed, plus LeaseLost/Recovered for expired ownership. They are distinct from DB/config errors, which return AppError.
 - FeedPoller::new uses the real shared client. with_transport is trusted Rust
   dependency injection for fixtures/policy-aware adapters, never a user input or
   HTTP option that disables destination checks.
@@ -25,7 +25,8 @@ cache or save a batch. In-flight GET may finish before cancellation is observed.
 
 Modified responses persist an immutable private feed_batches record, including
 source/feed config versions, resolved feed URL, parser format, metadata entries,
-byte count and semantic SHA-256. Its cache/status commit in the same transaction.
+byte count and semantic SHA-256. Its cache/status, normalization job and immutable
+machine-parent link commit in the same transaction.
 304 records an observed successful check and retains previous durable batches;
 it does not mean an empty feed. Hashes detect metadata changes, not authenticity.
 No source article deduplication, extraction, edition or public story is performed.
@@ -47,9 +48,11 @@ No source article deduplication, extraction, edition or public story is performe
 
 Longer Retry-After pauses automation for review instead of ignoring the server and
 polling early. fetch_paused means there is no automatic next attempt, regardless
-of the stored reservation time. Unpausing/audited manual retry is #21. A failed
-completion/worker crash leaves started rather than confirmed success; leases and
-abandoned-work recovery are also #21, not implemented by this due reservation.
+of the stored reservation time. #21's staged feed recovery now implements audited
+pause/resume, five-failure cycle exhaustion, 60-second leases and explicit bounded
+abandoned-attempt recovery. A failed storage completion leaves started rather than
+confirmed success. See docs/feed-recovery.md for exact recovery/Retry-After and
+historical unknown-hint holds; no startup worker is implied.
 
 DNS and parser blocking permits remain occupied until their real work ends if a
 caller times out; cancellation does not create unbounded detached workers. Product
@@ -84,14 +87,18 @@ INSERT attempts/batches; UPDATE terminal attempt fields; USAGE attempt sequence;
 EXECUTE lock_source_for_fetch(text). That function is REVOKEd from PUBLIC and does
 not return notes or grant config UPDATE. No auth account, story, publication, DDL,
 registry configuration or audit-rewrite permission is needed. Test roles prove it;
-actual provisioning is an explicit environment release operation.
+actual provisioning is an explicit environment release operation. The #21 feed
+recovery slice also needs normalization job/origin INSERT/SELECT, job sequence and
+lease/control/Retry-After operational fields; see docs/feed-recovery.md.
 
 All observed status stays private until protected admin views (#22). Errors are
 safe categories, never driver/parser/request text. Normaliser (#19) can replay a
 batch after crash even if the next HTTP request is 304. Job scheduling/leases/retry
-and pipeline UI remain #21/#22; no background loop or polling CLI is wired here.
+and pipeline UI retain remaining #21/#22 gates. The staged one-shot polling and
+recovery CLI is explicit; no background loop is wired into the web process.
 
-Build, run cargo tests and scripts/test_database.py. The wrapper creates seven
-fresh local databases and exercises the real binary separately. See the evidence
+Build, run cargo tests and scripts/test_database.py. The wrapper now creates eleven
+fresh local databases including staged feed/job recovery, and exercises real binaries
+separately. See the evidence
 record for exact outcomes and limits. Release still requires recovery, real TLS/
 egress/grant validation and the complete manual publishing acceptance journey.

@@ -60,7 +60,7 @@ fn config(url: &str) -> Config {
     Config::from_lookup(|key| (key == "DATABASE_URL").then(|| url.into())).unwrap()
 }
 async fn due(pool: &PgPool) {
-    sqlx::query("UPDATE news.feeds SET next_fetch_at=now()-interval '1 second' WHERE id='feed-a'")
+    sqlx::query("UPDATE news.feeds SET next_fetch_at=now()-interval '1 second',retry_after_observed_at=CASE WHEN retry_after_seconds IS NULL THEN NULL ELSE now()-interval '8 days' END WHERE id='feed-a'")
         .execute(pool)
         .await
         .unwrap();
@@ -88,13 +88,13 @@ async fn feed_polling_reserves_cadence_and_atomically_preserves_batches_before_c
     sqlx::raw_sql("INSERT INTO news.sources(id,name,homepage_url,enabled) VALUES ('source-a','Fixture source','https://source.invalid',true);
         INSERT INTO news.feeds(id,source_id,url,enabled,poll_seconds) VALUES ('feed-a','source-a','https://source.invalid/rss',true,60);
         CREATE ROLE fixture_fetch_worker LOGIN PASSWORD 'synthetic-fetch-worker'; GRANT USAGE ON SCHEMA news TO fixture_fetch_worker;
-        GRANT SELECT ON news.schema_version,news.feeds,news.feed_fetch_attempts,news.feed_batches TO fixture_fetch_worker;
+        GRANT SELECT ON news.schema_version,news.feeds,news.feed_fetch_attempts,news.feed_batches,news.normalization_jobs,news.normalization_job_origins TO fixture_fetch_worker;
         GRANT SELECT(id,enabled,lock_version) ON news.sources TO fixture_fetch_worker;
         GRANT EXECUTE ON FUNCTION news.lock_source_for_fetch(text) TO fixture_fetch_worker;
-        GRANT UPDATE(next_fetch_at,last_attempt_at,last_outcome,last_error,last_http_status,failure_count,fetch_paused,last_success_at,last_attempt_id,etag,last_modified,validator_url) ON news.feeds TO fixture_fetch_worker;
-        GRANT INSERT ON news.feed_fetch_attempts,news.feed_batches TO fixture_fetch_worker;
-        GRANT UPDATE(outcome,error_category,http_status,response_bytes,entry_count,finished_at) ON news.feed_fetch_attempts TO fixture_fetch_worker;
-        GRANT USAGE ON SEQUENCE news.feed_fetch_attempts_id_seq TO fixture_fetch_worker;
+        GRANT UPDATE(next_fetch_at,last_attempt_at,last_outcome,last_error,last_http_status,failure_count,fetch_paused,last_success_at,last_attempt_id,etag,last_modified,validator_url,fetch_control_version,fetch_pause_reason,retry_after_seconds,retry_after_observed_at) ON news.feeds TO fixture_fetch_worker;
+        GRANT INSERT ON news.feed_fetch_attempts,news.feed_batches,news.normalization_jobs,news.normalization_job_origins TO fixture_fetch_worker;
+        GRANT UPDATE(outcome,error_category,http_status,response_bytes,entry_count,finished_at,lease_until) ON news.feed_fetch_attempts TO fixture_fetch_worker;
+        GRANT USAGE ON SEQUENCE news.feed_fetch_attempts_id_seq,news.normalization_jobs_id_seq TO fixture_fetch_worker;
         CREATE ROLE fixture_fetch_reader LOGIN PASSWORD 'synthetic-fetch-reader'; GRANT USAGE ON SCHEMA news TO fixture_fetch_reader;
         GRANT SELECT ON news.schema_version TO fixture_fetch_reader;")
         .execute(&owner).await.unwrap();
@@ -272,6 +272,15 @@ async fn feed_polling_reserves_cadence_and_atomically_preserves_batches_before_c
         "started"
     );
     sqlx::raw_sql("DROP TRIGGER test_reject_feed_batch ON news.feed_batches;DROP FUNCTION news.test_reject_feed_batch();").execute(&owner).await.unwrap();
+    // A storage failure leaves a started leased attempt; it must be recovered,
+    // not silently replaced by a fresh due reservation.
+    assert_eq!(
+        poller.poll_due("feed-a").await.unwrap(),
+        PollOutcome::NotDue
+    );
+    sqlx::query("UPDATE news.feed_fetch_attempts SET lease_until=clock_timestamp()-interval '1 second' WHERE outcome='started'").execute(&owner).await.unwrap();
+    assert_eq!(poller.recover_expired().await.unwrap(), 1);
+
     due(&owner).await;
     assert!(matches!(
         poller.poll_due("feed-a").await.unwrap(),
