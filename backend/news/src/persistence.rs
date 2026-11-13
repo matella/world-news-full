@@ -12,6 +12,16 @@ pub fn pool(config: &Config) -> PgPool {
         .connect_lazy_with(config.database_options())
 }
 
+pub fn editor_pool(config: &Config) -> Option<PgPool> {
+    config.editor_database_options().map(|options| {
+        PgPoolOptions::new()
+            .max_connections(3)
+            .acquire_timeout(Duration::from_secs(3))
+            .idle_timeout(Duration::from_secs(30))
+            .connect_lazy_with(options)
+    })
+}
+
 /// Explicit operator command only; web startup never runs DDL.
 pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::migrate::MigrateError> {
     migrate_with(pool, &MIGRATOR).await

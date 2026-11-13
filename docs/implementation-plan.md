@@ -37,12 +37,17 @@ source implementation and disposable tests continue without production access.
 - PR #55, based on #54: #12 offline plan, explicit atomic apply,
   idempotent ledger and immutable archive snapshots. Unit, CLI and disposable-DB
   verification and GitHub CI passed; real production archive format remains unverified.
-- HTTP contract branch, based on #55: #14 compatible public URLs, minimal escaped
+- PR #56, based on #55: #14 compatible public URLs, minimal escaped
   published-data views, safe request metadata, input/body/time limits and explicit
   missing/outage/unimplemented states. Restricted-reader DB and real-process checks
-  passed. Full reader design/parity remains in #34–#40.
+  and GitHub CI passed. Full reader design/parity remains in #34–#40.
+- Local admin branch, based on #56: #15 explicit identity bootstrap, role checks,
+  private expiring sessions, CSRF/logout, audit and separated DB credentials. Four
+  fresh DB suites and Chromium form checks passed. Full editorial permission paths
+  remain a required consuming-workflow check in #16; no real accounts were created.
 
 #13 preceded #12 because both depend on #11 and the importer reuses typed content
 and error boundaries. This changes implementation order, not the dependency graph.
-Next: #15 authorisation and #16 editorial revision services. Route or import success
+Next: #16 editorial revision services, including transactional revalidation of
+session/permissions and concurrent edit/review/publication checks. Route or import success
 does not complete these issues or authorise a live release.

@@ -14,14 +14,15 @@ in #34–#40. This is not approval to replace the deployed reader.
 | `/archive?before_date=YYYY-MM-DD&before_id=:id` | Keyset pagination; both cursor fields required, invalid cursor 400 |
 | `/recherche?q=...` | Query validated (maximum 200 characters); 501 search-in-preparation, never a fake empty result (#38) |
 | `/sujets` | Explicit 501 topics-in-preparation (#39) |
-| `/admin` and `/admin/*` | Explicit 503 until authorisation/editor services land; no editor data or mutation handlers |
+| `/admin` and `/admin/*` | Disabled by default (503); explicitly configured sessions/roles protect admin views; see admin-auth.md |
 | `/health/live` | Process liveness JSON, independent of DB |
 | `/health/ready` | Exact migration versions/checksums via restricted metadata view; matching schema 200, otherwise 503 |
 
 Every published-data request checks schema readiness before repository reads.
 DB outage, permission misconfiguration or invalid stored content returns a redacted
-503, with Retry-After 60. Unknown paths return 404. Known paths accept GET/HEAD;
-other methods return 405 with Allow. HEAD responses have no body. No GraphQL or
+503, with Retry-After 60. Unknown paths return 404. Public paths accept GET/HEAD;
+other methods return 405 with Allow. Admin login/logout also accept POST under the
+identity/CSRF contract; Allow reflects each route. HEAD responses have no body. No GraphQL or
 internal HTTP API is introduced.
 
 Public page canonical links derive only from configured PUBLIC_URL and constructed,
@@ -54,9 +55,9 @@ privacy review in the deployment work. Request IDs are trace labels, not secrets
 All responses are no-store pending the correction/withdrawal cache policy. Error
 responses are noindex. Content is template escaped; body blocks are only paragraphs
 and h2/h3 headings; validated HTTP(S) source links never trigger server fetches.
-CSP disables scripts, remote assets and framing; no-referrer and nosniff apply.
+CSP disables scripts, remote assets and framing; same-origin referrer policy and nosniff apply.
 There is no CORS permission or cross-origin write mechanism. Authentication/CSRF
-and audit are #15; editorial writes remain unavailable.
+and identity audit are implemented in #15's branch; editorial writes remain unavailable.
 
 The renderer shows original-language text and clearly labels unverified imported
 archives. It does not yet implement French translation toggles, timeline/search,

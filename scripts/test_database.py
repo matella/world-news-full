@@ -58,6 +58,11 @@ def main():
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+http_database)
             http_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{http_database}")
             subprocess.run(["cargo","test","-p","world-news","--locked","--test","http","--","--ignored","--test-threads=1"],cwd=ROOT,env=http_env,check=True)
+        if (ROOT/"backend/news/tests/auth.rs").is_file():
+            auth_database=database+"_auth"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+auth_database)
+            auth_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{auth_database}")
+            subprocess.run(["cargo","test","-p","world-news","--locked","--test","auth","--","--ignored","--test-threads=1"],cwd=ROOT,env=auth_env,check=True)
         binary = ROOT / "target/debug/world-news"
         if not binary.is_file():
             raise RuntimeError("Build the binary before the database integration wrapper")
@@ -112,6 +117,11 @@ def main():
                 app.terminate()
                 app.wait(timeout=10)
         print("PASS: isolated schema upgrade, immutability, snapshot and reader-boundary integration")
+        if (ROOT/"backend/news/tests/auth.rs").is_file():
+            from test_rust_auth import exercise
+            exercise(binary,auth_env["WORLDNEWS_TEST_DATABASE_URL"],
+                     f"postgres://fixture_auth_reader:synthetic-auth-reader@127.0.0.1:{port}/{auth_database}",
+                     f"postgres://fixture_auth_writer:synthetic-auth-writer@127.0.0.1:{port}/{auth_database}")
     finally:
         subprocess.run(DOCKER + ["rm", "-f", "-v", name], capture_output=True)
 

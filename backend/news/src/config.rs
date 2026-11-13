@@ -12,6 +12,7 @@ pub struct Config {
     pub masthead: String,
     pub editorial: EditorialPolicy,
     database: PgConnectOptions,
+    editor_database: Option<PgConnectOptions>,
 }
 
 // Explicitly omit database options, credentials and configuration file contents.
@@ -71,7 +72,51 @@ impl Config {
             return Err("Production PUBLIC_URL must use HTTPS");
         }
         let database_url = get("DATABASE_URL").ok_or("DATABASE_URL is required")?;
-        let parsed = Url::parse(&database_url).map_err(|_| "Invalid Postgres DATABASE_URL")?;
+        let database = Self::connection(&database_url, production)?;
+        let editorial = Self::editorial_from_lookup(&get)?;
+        let editor_database = match get("NEWS_ADMIN_ENABLED").as_deref().unwrap_or("false") {
+            "false" => None,
+            "true" => {
+                let local_http = !production
+                    && matches!(
+                        public_url.host_str(),
+                        Some("localhost" | "127.0.0.1" | "[::1]")
+                    );
+                if public_url.scheme() != "https" && !local_http {
+                    return Err("Admin requires HTTPS, except loopback development");
+                }
+                let editor_url =
+                    get("EDITOR_DATABASE_URL").ok_or("Admin requires EDITOR_DATABASE_URL")?;
+                let reader_target =
+                    Url::parse(&database_url).map_err(|_| "Invalid Postgres reader target")?;
+                let editor_target =
+                    Url::parse(&editor_url).map_err(|_| "Invalid Postgres editor target")?;
+                if reader_target.host_str() != editor_target.host_str()
+                    || reader_target.port().unwrap_or(5432) != editor_target.port().unwrap_or(5432)
+                    || reader_target.path() != editor_target.path()
+                {
+                    return Err("Reader and editor must use the same database host, port and name");
+                }
+                Some(Self::connection(&editor_url, production)?)
+            }
+            _ => return Err("NEWS_ADMIN_ENABLED must be true or false"),
+        };
+        let masthead = get("NEWS_MASTHEAD").unwrap_or_else(|| "The World Brief".into());
+        if masthead.trim().is_empty() || masthead.chars().count() > 120 {
+            return Err("NEWS_MASTHEAD must contain 1 to 120 characters");
+        }
+        Ok(Self {
+            bind,
+            public_url,
+            masthead,
+            editorial,
+            database: database.disable_statement_logging(),
+            editor_database,
+        })
+    }
+
+    fn connection(database_url: &str, production: bool) -> Result<PgConnectOptions, &'static str> {
+        let parsed = Url::parse(database_url).map_err(|_| "Invalid Postgres DATABASE_URL")?;
         if !matches!(parsed.scheme(), "postgres" | "postgresql")
             || parsed.host_str().is_none()
             || parsed.path().trim_matches('/').is_empty()
@@ -90,18 +135,7 @@ impl Config {
             }
             database = database.ssl_mode(PgSslMode::VerifyFull);
         }
-        let editorial = Self::editorial_from_lookup(&get)?;
-        let masthead = get("NEWS_MASTHEAD").unwrap_or_else(|| "The World Brief".into());
-        if masthead.trim().is_empty() || masthead.chars().count() > 120 {
-            return Err("NEWS_MASTHEAD must contain 1 to 120 characters");
-        }
-        Ok(Self {
-            bind,
-            public_url,
-            masthead,
-            editorial,
-            database: database.disable_statement_logging(),
-        })
+        Ok(database.disable_statement_logging())
     }
 
     pub(crate) fn database_options(&self) -> PgConnectOptions {
@@ -110,6 +144,19 @@ impl Config {
             ("statement_timeout", "5000"),
             ("lock_timeout", "3000"),
         ])
+    }
+
+    pub fn admin_enabled(&self) -> bool {
+        self.editor_database.is_some()
+    }
+    pub(crate) fn editor_database_options(&self) -> Option<PgConnectOptions> {
+        self.editor_database.clone().map(|options| {
+            options.options([
+                ("search_path", "news,pg_catalog"),
+                ("statement_timeout", "5000"),
+                ("lock_timeout", "3000"),
+            ])
+        })
     }
 }
 
@@ -120,6 +167,75 @@ mod tests {
     fn parse(values: &[(&str, &str)]) -> Result<Config, &'static str> {
         let env: HashMap<_, _> = values.iter().copied().collect();
         Config::from_lookup(|key| env.get(key).map(|value| value.to_string()))
+    }
+
+    #[test]
+    fn admin_requires_explicit_writer_and_safe_public_origin() {
+        let base = [
+            ("DATABASE_URL", "postgres://reader:synthetic@localhost/news"),
+            ("NEWS_ADMIN_ENABLED", "true"),
+        ];
+        assert!(parse(&base).is_err());
+        let enabled = [
+            base[0],
+            base[1],
+            (
+                "EDITOR_DATABASE_URL",
+                "postgres://writer:synthetic-writer@localhost/news",
+            ),
+        ];
+        let config = parse(&enabled).unwrap();
+        assert!(config.admin_enabled());
+        assert!(!format!("{config:?}").contains("synthetic-writer"));
+        assert!(
+            parse(&[
+                enabled[0],
+                enabled[1],
+                (
+                    "EDITOR_DATABASE_URL",
+                    "postgres://writer:synthetic@localhost/another"
+                )
+            ])
+            .is_err()
+        );
+        assert!(
+            parse(&[
+                enabled[0],
+                enabled[1],
+                enabled[2],
+                ("PUBLIC_URL", "http://news.invalid")
+            ])
+            .is_err()
+        );
+        assert!(
+            parse(&[
+                enabled[0],
+                enabled[1],
+                enabled[2],
+                ("PUBLIC_URL", "https://news.invalid")
+            ])
+            .is_ok()
+        );
+        assert!(
+            parse(&[
+                ("DATABASE_URL", "postgres://localhost/news"),
+                ("NEWS_ADMIN_ENABLED", "1")
+            ])
+            .is_err()
+        );
+        assert!(
+            parse(&[
+                ("DATABASE_URL", "postgres://localhost/news"),
+                ("NEWS_ADMIN_ENABLED", "true"),
+                ("APP_ENV", "production"),
+                ("PUBLIC_URL", "https://news.invalid"),
+                (
+                    "EDITOR_DATABASE_URL",
+                    "postgres://localhost/news?sslmode=disable"
+                )
+            ])
+            .is_err()
+        );
     }
 
     #[test]

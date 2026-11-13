@@ -32,6 +32,8 @@ untrusted data. Do not conflate language, geography, outlet count and reporting 
 | Explicit schema change | `cargo run -p world-news -- --migrate` with authorised migration-owner DATABASE_URL; never run against live data without its release plan |
 | Offline import plan | `cargo run -p world-news -- --import-legacy FILE --dry-run`; no DB URL/network; review JSON report and exit 2 quarantine |
 | Staging import apply | `cargo run -p world-news -- --import-legacy FILE --apply` after migration; no live data without the explicit cutover/backup plan |
+| Staging local account bootstrap | `world-news --create-admin USER editor\|publisher` with authorised operator DB URL and password stdin; see docs/admin-auth.md; never automatic/live provisioning |
+| Staging account revocation | `world-news --disable-admin USER` with authorised operator DB URL; disables identity and all its sessions |
 | Rust checks | `cargo test --workspace --locked`, `cargo fmt --all -- --check`, `cargo clippy --workspace --locked --all-targets -- -D warnings` |
 | Persistence drill | `python3 scripts/test_persistence.py` (disposable Docker only) |
 | Frontend integration | `python3 scripts/test_frontend.py` after build; optional `WORLDNEWS_BROWSER_CHECK=1` uses installed Playwright/Chromium |
