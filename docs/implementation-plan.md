@@ -45,14 +45,18 @@ source implementation and disposable tests continue without production access.
   private expiring sessions, CSRF/logout, audit and separated DB credentials. Four
   fresh DB suites and Chromium form checks passed. Full editorial permission paths
   are now checked by #16's staged service; no real accounts were created. GitHub CI passed.
-- Editorial transition branch, based on #57: #16 immutable revision/action history,
+- PR #58, based on #57: #16 immutable revision/action history,
   exact-revision review, atomic publication/correction/withdrawal and live-session
   revalidation. All five DB suites and 23 unit tests passed, including concurrent
   edits, role-change locking and injected rollback. No publishing HTTP endpoint is
-  exposed before the complete content/editor policy gates are implemented.
+  exposed before the complete content/editor policy gates are implemented. GitHub CI passed.
+- Source registry branch, based on #58: #17 protected versioned source/feed/origin
+  configuration, explicit rights/storage/display policy, immutable private audit,
+  soft disable and captured historical attribution. All six DB suites passed;
+  no source is fetched or subscribed by registry operations.
 
 #13 preceded #12 because both depend on #11 and the importer reuses typed content
 and error boundaries. This changes implementation order, not the dependency graph.
-Next: #17 registry/provenance/rights defaults, followed by independent intake/jobs
-and article/editor/edition policy. Route/import/service success does not complete
+Next: bounded safe HTTP/feed intake, extraction/jobs and article/editor/edition
+policy. Route/import/service success does not complete
 those issues or authorise a live release.
