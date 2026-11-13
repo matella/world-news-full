@@ -22,6 +22,7 @@ jobs:
       - run: cargo test --workspace --locked
       - run: cargo build --workspace --locked
       - run: python3 scripts/test_rust_runtime.py
+      - run: python3 scripts/test_database.py
   frontend:
     runs-on: ubuntu-latest
     env:

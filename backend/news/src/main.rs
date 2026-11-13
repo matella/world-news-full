@@ -10,10 +10,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Configuration valid; no database connection or provider request made.");
         return Ok(());
     }
-    if !arguments.is_empty() {
-        return Err("Usage: world-news [--check-config]".into());
-    }
     let pool = persistence::pool(&config);
+    if arguments == ["--migrate"] {
+        let result = persistence::migrate(&pool).await;
+        pool.close().await;
+        result.map_err(|_| {
+            std::io::Error::other(
+                "Schema migration failed; verify connectivity, privileges and migration checksums.",
+            )
+        })?;
+        println!("App-owned schema migrated successfully.");
+        return Ok(());
+    }
+    if !arguments.is_empty() {
+        return Err("Usage: world-news [--check-config | --migrate]".into());
+    }
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "Rust newspaper foundation listening");
     axum::serve(listener, web::router(config, pool.clone()))

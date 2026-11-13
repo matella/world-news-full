@@ -50,15 +50,12 @@ async fn live() -> Json<Value> {
 }
 
 async fn ready(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
-    if persistence::database_available(&state.pool).await {
-        (
-            StatusCode::OK,
-            Json(json!({"status": "database_connected"})),
-        )
+    if persistence::schema_available(&state.pool).await {
+        (StatusCode::OK, Json(json!({"status": "schema_ready"})))
     } else {
         (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"status": "database_unavailable"})),
+            Json(json!({"status": "schema_unavailable"})),
         )
     }
 }

@@ -41,12 +41,12 @@ not yet an editor or word-count enforcement; those are #28/#29.
 
 - `domain`: validated editorial policy; article/revision models arrive with schema.
 - `config`: typed startup settings with no provider/secret logging.
-- `persistence`: lazy bounded SQLx Postgres pool and a timed connectivity probe.
+- `persistence`: bounded SQLx pool, explicit embedded migrations and schema readiness.
 - `web`: Axum routes and escaped Askama HTML; shared by the executable and tests.
 
-`/health/live` is process liveness. `/health/ready` checks **database connectivity
-only**, returning 503 when unavailable. Schema-version and complete-pipeline
-readiness remain #11/#44. `/` deliberately returns 503 with a preparation page;
+`/health/live` is process liveness. `/health/ready` checks every migration version
+and checksum via a restricted metadata view; absent/partial/drifted schemas return
+503. Complete-pipeline freshness remains #44. `/` returns 503 with a preparation page;
 it does not pretend an empty/new publishing implementation is finished. No admin,
 legacy query or publication endpoint is implemented yet. No global permissive CORS.
 
@@ -65,9 +65,24 @@ semantics and graceful shutdown without a live database or external provider.
 Axum/Tokio/serde/tracing match the existing Rust stack. Askama 0.16.1 is the current
 release inspected and supports Rust 1.88. SQLx 0.8.6 supports our pinned Rust 1.91.1;
 SQLx 0.9.0 requires Rust 1.94, so it is intentionally not selected. Disable SQLx
-default features: only Postgres and Tokio/Rustls are compiled, without extra
-databases/macros at this stage. chrono-tz validates the IANA timezone instead of
+default features: only Postgres and Tokio/Rustls are selected. Embedded migrations
+and typed row derives use SQLx macros; chrono/json support typed data. chrono-tz validates the IANA timezone instead of
 accepting an unchecked string. url provides maintained connection/origin parsing.
 These packages publish under MIT/Apache-2.0 compatible licenses per crate metadata.
 Cargo.lock pins transitive resolution. A RustSec audit is not claimed here;
 dependency/security release verification remains part of #48.
+
+## Owned schema and explicit migration
+
+Read [ADR 0002](../../docs/architecture/0002-owned-database.md) before targeting a
+database. Use `cargo run -p world-news -- --migrate` with an authorised migration
+owner's DATABASE_URL. It changes only the reserved news namespace and never runs
+automatically on web startup. Do not run against production without its explicit
+migration/backup plan. Runtime readers need SELECT on news.public_* and
+news.schema_version, not base tables or DDL rights. The legacy public schema is
+untouched; import is a separate command/work item.
+
+`python3 scripts/test_database.py` creates a uniquely named local Postgres 18
+database, runs the deliberately opt-in Rust DB integration suite, and removes
+only its own container/anonymous volume. It tests v1 -> latest migration, drift,
+immutable revisions/snapshots, withdrawal, reader grants and draft isolation.

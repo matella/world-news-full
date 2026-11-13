@@ -29,3 +29,7 @@ source implementation and disposable tests continue without production access.
 - Rust foundation branch based on #51: #10, typed config/policy, bounded pool,
   escaped preparation template, health endpoints and real-process smoke test.
 - No PR is merged, no issue is closed prematurely, and no live deployment occurred.
+
+Next batch in progress: #11 owned schema and schema-version readiness, followed by
+#12 offline/idempotent legacy import and #13 typed persistence. Schema integration
+uses an explicitly disposable database; no unknown legacy schema is modified.
