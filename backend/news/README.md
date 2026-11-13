@@ -48,9 +48,13 @@ not yet an editor or word-count enforcement; those are #28/#29.
 
 `/health/live` is process liveness. `/health/ready` checks every migration version
 and checksum via a restricted metadata view; absent/partial/drifted schemas return
-503. Complete-pipeline freshness remains #44. `/` returns 503 with a preparation page;
-it does not pretend an empty/new publishing implementation is finished. No admin,
-legacy query or publication endpoint is implemented yet. No global permissive CORS.
+503. Complete-pipeline freshness remains #44. Minimal HTML views now read published
+editions/stories/archives from restricted views. Empty archives return 200; missing
+public resources return 404; DB/schema outages return 503. `/recherche` and `/sujets`
+return explicit 501 while their implementation is pending. Admin reads return 503,
+and known-route mutations return 405. No publication endpoint or permissive CORS.
+See the [HTTP contract](../../docs/http-contract.md) for validation, canonical URLs,
+request IDs, timeout/body limits and what remains in the reader issues.
 
 ```sh
 cargo test -p world-news --locked
@@ -98,3 +102,5 @@ Read the [format, mapping and staging runbook](../../docs/legacy-import.md) firs
 This imports already-published history, not new intake or AI writing. SHA-256
 fingerprints reuse the existing sha2 0.10 dependency (MIT/Apache-2.0); they establish
 idempotency, not authenticity. JSON arbitrary precision preserves numeric values.
+`http-body-util`, already locked for tests and used by Axum, is also a runtime
+dependency for identifying actual streamed-body limit failures (MIT licensed).

@@ -37,6 +37,8 @@ def main():
             response = opener.open(f"http://127.0.0.1:{port}" + path, timeout=5)
         except HTTPError as error:
             response = error
+        assert response.headers.get("X-Request-Id"), "Missing request correlation"
+        assert response.headers.get("Cache-Control") == "no-store"
         return response.status, response.read().decode()
 
     with tempfile.TemporaryFile() as log:
@@ -53,15 +55,20 @@ def main():
                 raise RuntimeError("Rust process failed to become live")
             assert request("/health/ready")[0] == 503
             status, body = request("/")
-            assert status == 503 and "Édition en préparation" in body
-            assert request("/admin")[0] == 404
+            assert status == 503 and "Service indisponible" in body
+            assert request("/edition/2026-02-30")[0] == 400
+            assert request("/story/missing")[0] == 503
+            assert request("/recherche?q=synthetic-sensitive-query")[0] == 501
+            assert request("/admin")[0] == 503
             process.terminate()
             code = process.wait(timeout=10)
             if os.name == "posix":
                 assert code == 0, f"SIGTERM was not graceful: {code}"
             log.seek(0)
-            assert b"synthetic-private" not in log.read()
-            print("PASS: config validation/redaction, real process liveness, DB readiness 503, explicit preparation page, SIGTERM shutdown; no Node/provider required")
+            logs = log.read()
+            assert b"synthetic-private" not in logs
+            assert b"synthetic-sensitive-query" not in logs
+            print("PASS: config/redaction, request IDs/headers, route validation, truthful outage/unimplemented states, SIGTERM shutdown; no Node/provider required")
         finally:
             if process.poll() is None:
                 process.kill()

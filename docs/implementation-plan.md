@@ -34,11 +34,15 @@ source implementation and disposable tests continue without production access.
   views. Local disposable-DB verification and GitHub CI passed.
 - PR #54, based on #53: #13 typed repositories, bounded pagination and transactional
   draft creation. Local verification and GitHub CI passed.
-- Legacy import branch, based on #54: #12 offline plan, explicit atomic apply,
+- PR #55, based on #54: #12 offline plan, explicit atomic apply,
   idempotent ledger and immutable archive snapshots. Unit, CLI and disposable-DB
-  verification passed; real production archive format remains unverified.
+  verification and GitHub CI passed; real production archive format remains unverified.
+- HTTP contract branch, based on #55: #14 compatible public URLs, minimal escaped
+  published-data views, safe request metadata, input/body/time limits and explicit
+  missing/outage/unimplemented states. Restricted-reader DB and real-process checks
+  passed. Full reader design/parity remains in #34–#40.
 
 #13 preceded #12 because both depend on #11 and the importer reuses typed content
 and error boundaries. This changes implementation order, not the dependency graph.
-Next: #14 public HTTP routes against owned views, followed by #15 authorisation
-and #16 editorial revision services. Import success does not complete these issues.
+Next: #15 authorisation and #16 editorial revision services. Route or import success
+does not complete these issues or authorise a live release.

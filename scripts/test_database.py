@@ -8,7 +8,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import build_opener, ProxyHandler
 
 from test_persistence import DOCKER, run
@@ -53,6 +53,11 @@ def main():
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+legacy_database)
             legacy_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{legacy_database}")
             subprocess.run(["cargo","test","-p","world-news","--locked","--test","legacy_import","--","--ignored","--test-threads=1"],cwd=ROOT,env=legacy_env,check=True)
+        if (ROOT/"backend/news/tests/http.rs").is_file():
+            http_database=database+"_http"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+http_database)
+            http_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{http_database}")
+            subprocess.run(["cargo","test","-p","world-news","--locked","--test","http","--","--ignored","--test-threads=1"],cwd=ROOT,env=http_env,check=True)
         binary = ROOT / "target/debug/world-news"
         if not binary.is_file():
             raise RuntimeError("Build the binary before the database integration wrapper")
@@ -89,6 +94,20 @@ def main():
                         time.sleep(0.1)
                 else:
                     raise RuntimeError("Migrated-schema readiness did not succeed with reader role")
+                if (ROOT/"backend/news/tests/http.rs").is_file():
+                    for path,expected in [("/",200),("/archive",200),("/story/b",404),("/edition/2026-02-30",400),("/story/new-draft",503),("/recherche?q=synthetic-sensitive-query",501)]:
+                        try:
+                            response=opener.open(f"http://127.0.0.1:{web_port}"+path,timeout=12)
+                        except HTTPError as error:
+                            response=error
+                        assert response.status==expected, (path,response.status)
+                        assert response.headers.get("X-Request-Id")
+                        assert response.headers.get("Cache-Control")=="no-store"
+                        assert b"synthetic-public-only" not in response.read()
+                    log.seek(0)
+                    logs=log.read()
+                    assert b"synthetic-sensitive-query" not in logs
+                    assert b"synthetic-public-only" not in logs
             finally:
                 app.terminate()
                 app.wait(timeout=10)
