@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "default_language": "fr",
+  "publication_timezone": "Europe/Brussels",
+  "publication_mode": "manual",
+  "audience": "French-reading general audience with Belgium and world coverage",
+  "formats": {
+    "brief": {"min_words": 80, "max_words": 150},
+    "standard": {"min_words": 350, "max_words": 600},
+    "analysis": {"min_words": 800, "max_words": 1200}
+  },
+  "reading_words_per_minute": 200,
+  "edition_target_minutes": 10,
+  "length_override_requires_reason": true,
+  "ai_drafting_enabled": false,
+  "automatic_publication_enabled": false
+}

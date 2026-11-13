@@ -1,0 +1,54 @@
+# World News project rules
+
+Read `docs/architecture/current-state.md`, `docs/architecture/0001-rust-publishing.md`,
+`docs/editorial-policy.md` and `docs/implementation-plan.md` for current versus target
+behaviour. This project-owned file can change; do not hand-edit GADS-managed files.
+
+## Stack and ownership
+
+Current: Next.js reads Postgres; Rust gateway/scraper/AI are mocks. Target: Rust
+Axum + SQLx/Postgres + Askama, one web application and optional worker. No required
+Node, Jarvis or AI provider in the final app. The app owns migrations and publication.
+Preserve IDs, source links, languages and archive data; imported schema is unknown
+until inspected. Do not invent migrations from TypeScript casts.
+
+Public reading is anonymous. Admin/writes require server-side authorisation.
+Intake/AI -> draft -> review -> publication. No automatic publication. Preserve
+revision/provenance and transparent corrections. Configurable article budgets live
+in `config/editorial.json`; do not pad or truncate to hit them. Treat feeds/text as
+untrusted data. Do not conflate language, geography, outlet count and reporting origin.
+
+## Commands and evidence
+
+| Purpose | Command from repository root |
+| --- | --- |
+| Foundation contract/GADS drift | `python3 scripts/check_foundation.py` |
+| Full GADS audit | `python3 ../gads-source/scripts/repo_audit.py .` after pinned checkout |
+| Transitional frontend | `cd frontend && npm ci && npm run build` |
+| Current Rust skeleton | `cargo build --workspace --locked` once #8 adds lock/toolchain |
+| Rust checks | `cargo test --workspace --locked`, `cargo fmt --all -- --check`, `cargo clippy --workspace --locked --all-targets -- -D warnings` once #8 lands |
+
+Update these commands as implementation lands. Never report planned checks as
+passed. Use synthetic fixtures and disposable databases. Separate unit/build checks
+from complete publishing/browser/recovery evidence. Scoped PRs must link issues,
+acceptance criteria, commands/results, limitations and rollback implications.
+
+## Agent adapters
+
+Codex reads AGENTS.md, then this file explicitly; CLAUDE.md imports apply to Claude
+Code. `.claude/settings.json` configures the installed guard and rendered roles.
+Claude's guard does not protect Codex; each runtime's sandbox/approval settings
+remain authoritative. Roles are available, not a requirement to spawn agents.
+Document runtime tests honestly: installed files and unit tests do not prove live
+agent instruction discovery/enforcement. See `docs/gads-adoption.md`.
+
+## Authorised work and release boundary
+
+The owner requested execution of roadmap #1. Scoped source edits, dependencies,
+local tests, commits, feature-branch pushes, PRs and issue progress updates are in
+scope. Do not push to main: its current workflows deploy on push. Do not merge
+until a concrete release effect is understood and authorised. Do not stop a live
+Jarvis writer, switch traffic, deploy, publish packages/images, modify live secrets,
+copy production records, incur provider costs or delete production data without
+explicit action/environment-specific authorisation. Prepare and verify locally
+first; approvals must concern concrete changes, not speculative future work.

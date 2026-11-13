@@ -36,3 +36,6 @@ out/
 
 # Sauvegardes locales
 *.bak
+
+# Task scratch and cloned validation dependencies
+work/

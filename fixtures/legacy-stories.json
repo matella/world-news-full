@@ -1,0 +1,127 @@
+{
+  "synthetic": true,
+  "description": "Invented legacy payload, not asserted production DDL. Missing related IDs and null edition_date are intentional import warnings.",
+  "stories": [
+    {
+      "id": "legacy-a",
+      "title": "Invented river project",
+      "body": "Synthetic archive text, not a real report.",
+      "lang": "en",
+      "title_fr": "Projet fictif sur la place",
+      "body_fr": "Texte de démonstration traduit.",
+      "topic": null,
+      "origin_count": 1,
+      "source_count": 3,
+      "synthesized": true,
+      "claims_json": [
+        {
+          "claim": "Synthetic proposal awaiting vote",
+          "sources": [
+            0
+          ]
+        }
+      ],
+      "disagreements_json": [],
+      "disagreements_fr": null,
+      "sources_json": [
+        {
+          "name": "Fictional Dispatch",
+          "url": "https://dispatch.invalid/story/legacy-a"
+        }
+      ],
+      "edition_date": "2026-01-10",
+      "related_ids": [
+        "legacy-b",
+        "legacy-missing"
+      ],
+      "updated_at": "2026-01-10T12:00:00Z"
+    },
+    {
+      "id": "legacy-b",
+      "title": "Invented river project",
+      "body": "Synthetic archive text, not a real report.",
+      "lang": "en",
+      "title_fr": null,
+      "body_fr": null,
+      "topic": null,
+      "origin_count": 1,
+      "source_count": 1,
+      "synthesized": false,
+      "claims_json": [],
+      "disagreements_json": [
+        {
+          "point": "Synthetic access plan",
+          "positions": [
+            "Shop A requests deliveries",
+            "Resident B requests crossings"
+          ]
+        }
+      ],
+      "disagreements_fr": null,
+      "sources_json": [
+        {
+          "name": "Fictional Dispatch",
+          "url": "https://dispatch.invalid/story/legacy-b"
+        }
+      ],
+      "edition_date": "2026-01-11",
+      "related_ids": [
+        "legacy-a",
+        "legacy-c"
+      ],
+      "updated_at": "2026-01-11T12:00:00Z"
+    },
+    {
+      "id": "legacy-c",
+      "title": "Correction fictive du calendrier",
+      "body": "Synthetic archive text, not a real report.",
+      "lang": "fr",
+      "title_fr": null,
+      "body_fr": null,
+      "topic": "science",
+      "origin_count": 1,
+      "source_count": 1,
+      "synthesized": false,
+      "claims_json": [],
+      "disagreements_json": [],
+      "disagreements_fr": null,
+      "sources_json": null,
+      "edition_date": "2026-01-12",
+      "related_ids": [
+        "legacy-a"
+      ],
+      "updated_at": "2026-01-12T12:00:00Z"
+    },
+    {
+      "id": "legacy-partial",
+      "title": "Invented river project",
+      "body": "",
+      "lang": "en",
+      "title_fr": null,
+      "body_fr": null,
+      "topic": null,
+      "origin_count": 0,
+      "source_count": 0,
+      "synthesized": false,
+      "claims_json": [],
+      "disagreements_json": [],
+      "disagreements_fr": null,
+      "sources_json": [
+        {
+          "name": "Fictional Dispatch",
+          "url": "https://dispatch.invalid/story/legacy-partial"
+        }
+      ],
+      "edition_date": null,
+      "related_ids": [],
+      "updated_at": "2026-01-12T12:00:00Z"
+    }
+  ],
+  "corrections": [
+    {
+      "story_id": "legacy-c",
+      "previous_title": "Ancien calendrier fictif",
+      "reason": "Invented date corrected; preserve provenance"
+    }
+  ]
+}
