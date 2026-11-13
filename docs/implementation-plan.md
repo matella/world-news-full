@@ -68,9 +68,15 @@ source implementation and disposable tests continue without production access.
 - Rights-aware intake branch, based on #61: #20 bounded inert HTML extraction,
   current rights/session checks, private provenance and removable publisher text,
   manual source links/notes and atomic original draft linkage. Nine fresh DB suites,
-  33 unit/in-process tests and CLI/process checks passed. CI pending at opening.
+  33 unit/in-process tests and CLI/process checks passed. Both CI workflows passed.
   No public text reuse, startup worker or protected editor UI is implied.
 
-Next: #21 durable jobs, retries/recovery and authenticated operations, then admin UI,
+- Durable normalization job branch, based on #62: first #21 slice with fenced
+  Postgres claims, leases, bounded retries, attempt/operator audit, explicit one-job
+  CLI and atomic normalization acknowledgement. Ten disposable DB suites and
+  34 unit/in-process tests passed; CI pending at opening.
+  Fetch recovery, machine extraction authority and daemon activation remain #21 gates.
+
+Next: finish #21 job verification and its remaining fetch/extraction boundaries, then admin UI,
 article/citation/length/editor and edition policy. Service success does not complete
 those issues or authorise a live release.

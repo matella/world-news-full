@@ -186,3 +186,14 @@ text to a draft. Source storage revocation removes retained intake text while ke
 audit metadata. See [contracts](../../docs/article-intake.md) and
 [ADR 0008](../../docs/architecture/0008-rights-aware-intake.md). Migration 9 is local/
 staged only; protected UI and durable jobs remain separate work.
+
+## Durable normalization jobs
+
+`JobAdmin` authorizes batch enqueue/replay/cancel and private status/history.
+`Queue` claims leased jobs with generation fencing, retries and abandoned-work
+recovery. Normalizer output and job success commit together; cancellation/expiry
+cannot authorize stale content writes. Run `world-news --work-normalization-once`
+explicitly with a restricted worker DB role; it never starts fetching or publishing.
+See [operations](../../docs/normalization-jobs.md) and
+[ADR 0009](../../docs/architecture/0009-durable-normalization-jobs.md). Fetch recovery,
+machine extraction authority and daemon scheduling remain open gates in #21.

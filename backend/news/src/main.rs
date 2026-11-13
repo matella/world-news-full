@@ -40,6 +40,21 @@ async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
     let pool = persistence::pool(&config);
+    if arguments == ["--work-normalization-once"] {
+        let result = world_news::intake::jobs::Queue::new(pool.clone())
+            .work_once()
+            .await;
+        pool.close().await;
+        let result = result?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(
+            if matches!(result, world_news::intake::jobs::WorkOutcome::Failed { .. }) {
+                ExitCode::from(2)
+            } else {
+                ExitCode::SUCCESS
+            },
+        );
+    }
     if arguments.first().is_some_and(|a| a == "--create-admin") {
         if arguments.len() != 3 {
             return Err(
