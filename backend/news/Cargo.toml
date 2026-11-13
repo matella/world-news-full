@@ -30,6 +30,7 @@ feed-rs = "3"
 quick-xml = { version = "0.42", features = ["encoding"] }
 ipnet = "2"
 httpdate = "1"
+html_scraper = { package = "scraper", version = "0.29", default-features = false }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

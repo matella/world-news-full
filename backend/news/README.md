@@ -176,3 +176,13 @@ See [normalization contracts](../../docs/source-normalization.md) and
 [ADR 0007](../../docs/architecture/0007-conservative-normalization.md). Migration 8
 is additive. `scripts/test_database.py` now includes a separate normalization DB
 with concurrent, replay, rollback and restricted-worker checks.
+
+## Rights-aware extraction and manual intake
+
+`IntakeService` uses live sessions and current source policy for scoped HTML-to-text
+extraction, private provenance/failure history, manual source links/notes and atomic
+separately authored original drafts. It never auto-publishes or copies extracted
+text to a draft. Source storage revocation removes retained intake text while keeping
+audit metadata. See [contracts](../../docs/article-intake.md) and
+[ADR 0008](../../docs/architecture/0008-rights-aware-intake.md). Migration 9 is local/
+staged only; protected UI and durable jobs remain separate work.

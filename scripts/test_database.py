@@ -83,6 +83,11 @@ def main():
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+normalize_database)
             normalize_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{normalize_database}")
             subprocess.run(["cargo","test","-p","world-news","--locked","--test","normalize","--","--ignored","--test-threads=1"],cwd=ROOT,env=normalize_env,check=True)
+        if (ROOT/"backend/news/tests/intake.rs").is_file():
+            intake_database=database+"_intake"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+intake_database)
+            intake_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{intake_database}")
+            subprocess.run(["cargo","test","-p","world-news","--locked","--test","intake","--","--ignored","--test-threads=1"],cwd=ROOT,env=intake_env,check=True)
         binary = ROOT / "target/debug/world-news"
         if not binary.is_file():
             raise RuntimeError("Build the binary before the database integration wrapper")

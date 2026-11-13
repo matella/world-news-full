@@ -110,6 +110,25 @@ impl SafeHttp {
         max_bytes: usize,
         validators: &Validators,
     ) -> Result<DownloadResult, FetchError> {
+        self.get_scoped(url, max_bytes, validators, false).await
+    }
+    /// Extraction rights are scoped to an origin. Check before resolving or
+    /// contacting every redirect destination, in addition to the shared IP policy.
+    pub async fn get_same_origin(
+        &self,
+        url: &str,
+        max_bytes: usize,
+    ) -> Result<DownloadResult, FetchError> {
+        self.get_scoped(url, max_bytes, &Validators::default(), true)
+            .await
+    }
+    async fn get_scoped(
+        &self,
+        url: &str,
+        max_bytes: usize,
+        validators: &Validators,
+        same_origin: bool,
+    ) -> Result<DownloadResult, FetchError> {
         if !(16384..=10485760).contains(&max_bytes) {
             return Err(FetchError::TooLarge);
         }
@@ -118,19 +137,27 @@ impl SafeHttp {
             .clone()
             .try_acquire_owned()
             .map_err(|_| FetchError::Busy)?;
-        tokio::time::timeout(self.budget, self.hops(url, max_bytes, validators))
-            .await
-            .map_err(|_| FetchError::Timeout)?
+        tokio::time::timeout(
+            self.budget,
+            self.hops(url, max_bytes, validators, same_origin),
+        )
+        .await
+        .map_err(|_| FetchError::Timeout)?
     }
     async fn hops(
         &self,
         input: &str,
         max_bytes: usize,
         validators: &Validators,
+        same_origin: bool,
     ) -> Result<DownloadResult, FetchError> {
         let mut url = target_url(input)?;
+        let original_origin = url.origin();
         let mut visited = BTreeSet::new();
         for hop in 0..=3 {
+            if same_origin && url.origin() != original_origin {
+                return Err(FetchError::BlockedTarget);
+            }
             if !visited.insert(url.as_str().to_owned()) {
                 return Err(FetchError::RedirectLimit);
             }

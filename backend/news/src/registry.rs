@@ -75,7 +75,7 @@ pub struct SourceSpec {
     pub origin_ids: Vec<String>,
 }
 impl SourceSpec {
-    fn validate(&self) -> Result<(), AppError> {
+    pub(crate) fn validate(&self) -> Result<(), AppError> {
         let arrays = self.languages.len() <= 20
             && self.languages.iter().all(|v| valid_language(v))
             && self.geographic_coverage.len() <= 20
@@ -217,7 +217,7 @@ impl Entity {
         }
     }
 }
-const SOURCE_SELECT: &str = "SELECT s.id,s.lock_version,(to_jsonb(s)-'id'-'lock_version'-'metadata'-'created_at') || jsonb_build_object('origin_ids',ARRAY(SELECT origin_id FROM news.source_origin_links WHERE source_id=s.id ORDER BY origin_id)) AS spec FROM news.sources s";
+pub(crate) const SOURCE_SELECT: &str = "SELECT s.id,s.lock_version,(to_jsonb(s)-'id'-'lock_version'-'metadata'-'created_at') || jsonb_build_object('origin_ids',ARRAY(SELECT origin_id FROM news.source_origin_links WHERE source_id=s.id ORDER BY origin_id)) AS spec FROM news.sources s";
 const FEED_SELECT: &str = "SELECT f.id,f.lock_version,jsonb_build_object('source_id',f.source_id,'url',f.url,'enabled',f.enabled,'poll_seconds',f.poll_seconds,'max_response_bytes',f.max_response_bytes) AS spec FROM news.feeds f";
 const ORIGIN_SELECT: &str = "SELECT o.id,o.lock_version,to_jsonb(o)-'id'-'lock_version' AS spec FROM news.reporting_origins o";
 #[derive(Clone)]

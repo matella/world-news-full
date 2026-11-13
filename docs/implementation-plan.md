@@ -60,11 +60,17 @@ source implementation and disposable tests continue without production access.
   polling loop, arbitrary production subscription or publication side effect. Both
   CI workflows passed.
 
-- Normalization branch, based on #60: #19 deterministic URL identity, immutable
+- PR #61, based on #60: #19 deterministic URL identity, immutable
   entry observations and idempotent receipts; conservative conflicts/changes never
   overwrite existing article identity or text. All eight disposable DB suites and
-  30 unit/in-process tests passed. CI is pending at opening.
+  30 unit/in-process tests passed. Both CI workflows passed.
 
-Next: finish #19 checks,
-then rights-aware extraction/jobs and article/editor/edition policy. Service success does not complete
+- Rights-aware intake branch, based on #61: #20 bounded inert HTML extraction,
+  current rights/session checks, private provenance and removable publisher text,
+  manual source links/notes and atomic original draft linkage. Nine fresh DB suites,
+  33 unit/in-process tests and CLI/process checks passed. CI pending at opening.
+  No public text reuse, startup worker or protected editor UI is implied.
+
+Next: #21 durable jobs, retries/recovery and authenticated operations, then admin UI,
+article/citation/length/editor and edition policy. Service success does not complete
 those issues or authorise a live release.
