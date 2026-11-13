@@ -33,3 +33,7 @@ source implementation and disposable tests continue without production access.
 Next batch in progress: #11 owned schema and schema-version readiness, followed by
 #12 offline/idempotent legacy import and #13 typed persistence. Schema integration
 uses an explicitly disposable database; no unknown legacy schema is modified.
+
+PR #53 implements #11 and passed GitHub CI. #13 is implemented before #12 because
+both depend on #11 and the importer can reuse typed content/error boundaries.
+This changes implementation order, not the dependency graph or product scope.

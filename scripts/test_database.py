@@ -15,6 +15,11 @@ from test_persistence import DOCKER, run
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def container_logs(name):
+    result=subprocess.run(DOCKER+["logs","--tail","40",name],capture_output=True)
+    return (result.stdout+result.stderr)[-8000:].decode(errors="replace")
+
+
 def main():
     suffix = uuid.uuid4().hex[:12]
     name = "worldnews-schema-" + suffix
@@ -30,9 +35,12 @@ def main():
                 run("exec", name, "psql", "-U", "postgres", "-d", database, "-Atc", "SELECT 1")
                 break
             except subprocess.CalledProcessError:
+                state=run("inspect",name,"--format","{{.State.Status}}").decode().strip()
+                if state == "exited":
+                    raise RuntimeError("Disposable Postgres exited: " + container_logs(name))
                 time.sleep(0.5)
         else:
-            raise RuntimeError("Disposable Postgres did not become ready")
+            raise RuntimeError("Disposable Postgres did not become ready: " + container_logs(name))
         port = run("port", name, "5432").decode().strip().rsplit(":", 1)[1]
         env = dict(os.environ,
                    WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{database}",
