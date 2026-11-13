@@ -19,3 +19,13 @@ Never mark 48 issues complete because a scaffold exists. Optional AI remains off
 
 Current production schema, exposure, storage and publisher are unverified. Local
 source implementation and disposable tests continue without production access.
+
+## Current staged work
+
+- PR #50: baseline, GADS, ADR and editorial settings (#2/#3/#4/#9).
+  Foundation CI passed. #3 still lacks live Claude Code runtime validation.
+- PR #51, based on #50: current-app safety/build/persistence (#5–#8).
+  Local and CI verification passed; production/PVC/real-role steps remain unverified.
+- Rust foundation branch based on #51: #10, typed config/policy, bounded pool,
+  escaped preparation template, health endpoints and real-process smoke test.
+- No PR is merged, no issue is closed prematurely, and no live deployment occurred.

@@ -1,0 +1,73 @@
+# Rust newspaper foundation
+
+Related issue: #10. This is the runnable foundation, **not** the completed newspaper.
+The current Next application remains the reader application until later issues land.
+
+```sh
+cargo build -p world-news --locked
+DATABASE_URL=postgres://reader:fixture@127.0.0.1:5432/news cargo run -p world-news -- --check-config
+DATABASE_URL=postgres://reader:fixture@127.0.0.1:5432/news cargo run -p world-news
+```
+
+The sample password is synthetic. Inject actual credentials outside Git. The config
+check validates without connecting or calling providers. The binary defaults to
+`127.0.0.1:3001` so it does not replace the existing app. Containers must explicitly
+set `BIND_ADDR=0.0.0.0:3001`. The application handles SIGINT/SIGTERM and closes its
+bounded pool after draining HTTP work. No Node, Jarvis or AI provider is needed.
+
+## Configuration
+
+| Variable | Behaviour |
+| --- | --- |
+| `DATABASE_URL` | Required Postgres host/database; never printed. Reader credentials only until mutation services exist. |
+| `APP_ENV` | `development` (default) or `production`; rejects unknown modes. |
+| `PUBLIC_URL` | Origin only, defaults `http://localhost:3001`; production requires explicit HTTPS origin. No credentials/path/query/fragment. |
+| `BIND_ADDR` | IP:port, defaults loopback port 3001. |
+| `NEWS_MASTHEAD` | 1–120 characters, template-escaped; defaults The World Brief. |
+| `NEWS_EDITORIAL_CONFIG` | Optional JSON file path; otherwise compiles repository `config/editorial.json` as the default. |
+
+Production database TLS uses hostname/certificate verification (`verify-full`).
+An explicit weaker `sslmode` is rejected; configure the database trust chain before
+production use. Local development can connect to a disposable Postgres without TLS.
+Configuration validation sanitises failures and Debug omits connection options.
+Statement logging is disabled to avoid exposing future editorial data.
+
+Editorial settings validate schema/version, IANA timezone, word ranges and reading
+budgets. Only manual publication/no AI and the initial French UI are implemented;
+unimplemented modes fail validation instead of pretending to work. Settings are
+not yet an editor or word-count enforcement; those are #28/#29.
+
+## Modules and endpoints
+
+- `domain`: validated editorial policy; article/revision models arrive with schema.
+- `config`: typed startup settings with no provider/secret logging.
+- `persistence`: lazy bounded SQLx Postgres pool and a timed connectivity probe.
+- `web`: Axum routes and escaped Askama HTML; shared by the executable and tests.
+
+`/health/live` is process liveness. `/health/ready` checks **database connectivity
+only**, returning 503 when unavailable. Schema-version and complete-pipeline
+readiness remain #11/#44. `/` deliberately returns 503 with a preparation page;
+it does not pretend an empty/new publishing implementation is finished. No admin,
+legacy query or publication endpoint is implemented yet. No global permissive CORS.
+
+```sh
+cargo test -p world-news --locked
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+python3 scripts/test_rust_runtime.py
+```
+
+The last command exercises the real built binary, startup validation, status
+semantics and graceful shutdown without a live database or external provider.
+
+## Dependency choices
+
+Axum/Tokio/serde/tracing match the existing Rust stack. Askama 0.16.1 is the current
+release inspected and supports Rust 1.88. SQLx 0.8.6 supports our pinned Rust 1.91.1;
+SQLx 0.9.0 requires Rust 1.94, so it is intentionally not selected. Disable SQLx
+default features: only Postgres and Tokio/Rustls are compiled, without extra
+databases/macros at this stage. chrono-tz validates the IANA timezone instead of
+accepting an unchecked string. url provides maintained connection/origin parsing.
+These packages publish under MIT/Apache-2.0 compatible licenses per crate metadata.
+Cargo.lock pins transitive resolution. A RustSec audit is not claimed here;
+dependency/security release verification remains part of #48.
