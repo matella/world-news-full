@@ -162,3 +162,17 @@ exists only in tests. No ambient proxy/credentials, automatic redirects/retry or
 decompression bypass the shared policy. Normalisation, extraction, worker recovery
 and protected operations UI remain separate issues. Tests use local fixtures and
 private disposable metadata, not real feeds or owner credentials for runtime work.
+
+## Source normalization
+
+Internal `Normalizer::apply(attempt_id)` consumes durable metadata batches into
+metadata-only source articles, immutable per-entry observations and replay receipts.
+URL identity is conservative and versioned; headline/parser IDs never merge items.
+Existing articles remain unchanged when new metadata differs. Missing/ambiguous
+links and conflicting attribution quarantine for operator review. No article fetch,
+origin certification, scheduler or story publication occurs.
+
+See [normalization contracts](../../docs/source-normalization.md) and
+[ADR 0007](../../docs/architecture/0007-conservative-normalization.md). Migration 8
+is additive. `scripts/test_database.py` now includes a separate normalization DB
+with concurrent, replay, rollback and restricted-worker checks.

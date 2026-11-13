@@ -30,6 +30,9 @@ captured source attribution and disable configuration instead of deleting histor
 Use the shared SafeHttp policy for future extraction, not an unguarded new client.
 Keep TLS verification, every-hop DNS/IP checks and byte/time bounds. No body/token/
 URL payload logging, production private-address escape or ambient credential proxy.
+Preserve normalization observations and original links; never use a headline or parser
+ID as an article identity. Keep changed metadata for review without rewriting existing
+articles. Configured origin links do not certify article origins.
 Persist metadata before advancing feed validators; fetch status is not publication
 or whole-pipeline success. Do not add a startup polling loop before job/recovery gates.
 
