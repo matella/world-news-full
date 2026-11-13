@@ -26,14 +26,19 @@ source implementation and disposable tests continue without production access.
   Foundation CI passed. #3 still lacks live Claude Code runtime validation.
 - PR #51, based on #50: current-app safety/build/persistence (#5–#8).
   Local and CI verification passed; production/PVC/real-role steps remain unverified.
-- Rust foundation branch based on #51: #10, typed config/policy, bounded pool,
+- PR #52, based on #51: #10, typed config/policy, bounded pool,
   escaped preparation template, health endpoints and real-process smoke test.
 - No PR is merged, no issue is closed prematurely, and no live deployment occurred.
 
-Next batch in progress: #11 owned schema and schema-version readiness, followed by
-#12 offline/idempotent legacy import and #13 typed persistence. Schema integration
-uses an explicitly disposable database; no unknown legacy schema is modified.
+- PR #53, based on #52: #11 owned schema, embedded migrations and restricted public
+  views. Local disposable-DB verification and GitHub CI passed.
+- PR #54, based on #53: #13 typed repositories, bounded pagination and transactional
+  draft creation. Local verification and GitHub CI passed.
+- Legacy import branch, based on #54: #12 offline plan, explicit atomic apply,
+  idempotent ledger and immutable archive snapshots. Unit, CLI and disposable-DB
+  verification passed; real production archive format remains unverified.
 
-PR #53 implements #11 and passed GitHub CI. #13 is implemented before #12 because
-both depend on #11 and the importer can reuse typed content/error boundaries.
-This changes implementation order, not the dependency graph or product scope.
+#13 preceded #12 because both depend on #11 and the importer reuses typed content
+and error boundaries. This changes implementation order, not the dependency graph.
+Next: #14 public HTTP routes against owned views, followed by #15 authorisation
+and #16 editorial revision services. Import success does not complete these issues.

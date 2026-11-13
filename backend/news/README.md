@@ -88,3 +88,13 @@ untouched; import is a separate command/work item.
 database, runs the deliberately opt-in Rust DB integration suite, and removes
 only its own container/anonymous volume. It tests v1 -> latest migration, drift,
 immutable revisions/snapshots, withdrawal, reader grants and draft isolation.
+
+## Offline legacy import
+
+`world-news --import-legacy FILE [--dry-run | --apply]` defaults to a bounded offline
+plan, requiring no DB credentials. Apply is explicit, transactional and idempotent;
+quarantine is reported with exit code 2 rather than silently dropping records.
+Read the [format, mapping and staging runbook](../../docs/legacy-import.md) first.
+This imports already-published history, not new intake or AI writing. SHA-256
+fingerprints reuse the existing sha2 0.10 dependency (MIT/Apache-2.0); they establish
+idempotency, not authenticity. JSON arbitrary precision preserves numeric values.

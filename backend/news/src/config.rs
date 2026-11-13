@@ -25,6 +25,21 @@ impl fmt::Debug for Config {
 }
 
 impl Config {
+    pub fn editorial_from_env() -> Result<EditorialPolicy, &'static str> {
+        Self::editorial_from_lookup(|key| std::env::var(key).ok())
+    }
+
+    fn editorial_from_lookup(
+        get: impl Fn(&str) -> Option<String>,
+    ) -> Result<EditorialPolicy, &'static str> {
+        let text = match get("NEWS_EDITORIAL_CONFIG") {
+            Some(path) => {
+                std::fs::read_to_string(path).map_err(|_| "Cannot read NEWS_EDITORIAL_CONFIG")?
+            }
+            None => include_str!("../../../config/editorial.json").to_owned(),
+        };
+        EditorialPolicy::parse(&text)
+    }
     pub fn from_env() -> Result<Self, &'static str> {
         Self::from_lookup(|key| std::env::var(key).ok())
     }
@@ -75,13 +90,7 @@ impl Config {
             }
             database = database.ssl_mode(PgSslMode::VerifyFull);
         }
-        let policy_text = match get("NEWS_EDITORIAL_CONFIG") {
-            Some(path) => {
-                std::fs::read_to_string(path).map_err(|_| "Cannot read NEWS_EDITORIAL_CONFIG")?
-            }
-            None => include_str!("../../../config/editorial.json").to_owned(),
-        };
-        let editorial = EditorialPolicy::parse(&policy_text)?;
+        let editorial = Self::editorial_from_lookup(&get)?;
         let masthead = get("NEWS_MASTHEAD").unwrap_or_else(|| "The World Brief".into());
         if masthead.trim().is_empty() || masthead.chars().count() > 120 {
             return Err("NEWS_MASTHEAD must contain 1 to 120 characters");
