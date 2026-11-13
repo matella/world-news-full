@@ -218,7 +218,7 @@ impl Entity {
     }
 }
 const SOURCE_SELECT: &str = "SELECT s.id,s.lock_version,(to_jsonb(s)-'id'-'lock_version'-'metadata'-'created_at') || jsonb_build_object('origin_ids',ARRAY(SELECT origin_id FROM news.source_origin_links WHERE source_id=s.id ORDER BY origin_id)) AS spec FROM news.sources s";
-const FEED_SELECT: &str = "SELECT f.id,f.lock_version,to_jsonb(f)-'id'-'lock_version'-'etag'-'last_modified'-'last_success_at'-'next_fetch_at' AS spec FROM news.feeds f";
+const FEED_SELECT: &str = "SELECT f.id,f.lock_version,jsonb_build_object('source_id',f.source_id,'url',f.url,'enabled',f.enabled,'poll_seconds',f.poll_seconds,'max_response_bytes',f.max_response_bytes) AS spec FROM news.feeds f";
 const ORIGIN_SELECT: &str = "SELECT o.id,o.lock_version,to_jsonb(o)-'id'-'lock_version' AS spec FROM news.reporting_origins o";
 #[derive(Clone)]
 pub struct Registry {
@@ -602,28 +602,7 @@ pub fn registry_url(value: &str) -> bool {
     {
         return false;
     }
-    !url.query_pairs().any(|(key, _)| {
-        let key = key.to_ascii_lowercase().replace('-', "_");
-        key == "key"
-            || key == "auth"
-            || key == "sid"
-            || key == "session"
-            || key.ends_with("_key")
-            || key == "sig"
-            || [
-                "token",
-                "secret",
-                "password",
-                "authorization",
-                "credential",
-                "cookie",
-                "signature",
-                "api_key",
-                "apikey",
-            ]
-            .iter()
-            .any(|part| key.contains(part))
-    })
+    crate::content::public_url_parameters(&url)
 }
 #[cfg(test)]
 mod tests {

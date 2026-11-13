@@ -146,3 +146,19 @@ has a private immutable before/after audit. Registry operations make no HTTP req
 and start no subscriptions. See [contracts](../../docs/source-registry.md) and
 [ADR 0005](../../docs/architecture/0005-source-registry.md). Admin screens and safe
 fetching/extraction/jobs remain separate work; no new dependencies are introduced.
+
+## Configured feed intake
+
+Internal `SafeHttp`, `FeedClient` and `FeedPoller` implement bounded DNS-pinned
+HTTP(S), RSS/Atom metadata parsing, per-feed due reservations/retry status and
+immutable metadata batches committed with cache validators. No worker loop or
+default subscriptions start with the web process. Fetched text is data, never an
+instruction or a publishable story; content/summary fields are not retained.
+
+Read [intake contracts](../../docs/feed-intake.md) and
+[ADR 0006](../../docs/architecture/0006-safe-feed-intake.md). Production destinations
+are public HTTP/80 or HTTPS/443 only, with TLS verification; local fixture permission
+exists only in tests. No ambient proxy/credentials, automatic redirects/retry or
+decompression bypass the shared policy. Normalisation, extraction, worker recovery
+and protected operations UI remain separate issues. Tests use local fixtures and
+private disposable metadata, not real feeds or owner credentials for runtime work.

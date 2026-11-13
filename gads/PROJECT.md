@@ -27,6 +27,11 @@ must resolve to metadata/link-only behaviour even when a legacy policy claims mo
 Use effective policies in future fetch/extraction/display paths; registry URL
 syntax checks do not replace DNS/redirect/IP checks at actual fetch time. Preserve
 captured source attribution and disable configuration instead of deleting history.
+Use the shared SafeHttp policy for future extraction, not an unguarded new client.
+Keep TLS verification, every-hop DNS/IP checks and byte/time bounds. No body/token/
+URL payload logging, production private-address escape or ambient credential proxy.
+Persist metadata before advancing feed validators; fetch status is not publication
+or whole-pipeline success. Do not add a startup polling loop before job/recovery gates.
 
 ## Commands and evidence
 
