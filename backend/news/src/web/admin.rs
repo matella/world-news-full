@@ -1,5 +1,6 @@
 mod editor;
 mod evidence;
+mod origins;
 mod pipeline;
 use super::*;
 use crate::auth::{AuthError, Login, Permission, Role, Session};
@@ -36,6 +37,7 @@ pub(super) fn routes(state: AppState) -> Router<AppState> {
         .merge(pipeline::routes())
         .merge(editor::routes())
         .merge(evidence::routes())
+        .merge(origins::routes())
         .route("/admin/{*rest}", get(super::not_found))
         .route_layer(middleware::from_fn_with_state(state, guard))
 }
@@ -63,6 +65,7 @@ async fn guard(State(state): State<AppState>, mut request: Request, next: Next) 
             || path.starts_with("/admin/jobs/")
             || path.starts_with("/admin/extractions/")
             || path.starts_with("/admin/batches/")
+            || (path.starts_with("/admin/editor/source/") && path.ends_with("/origins"))
             || (path.starts_with("/admin/articles/") && path.ends_with("/extract")));
     let permission = if path == "/admin/publishing" || publisher_mutation {
         Permission::Publish

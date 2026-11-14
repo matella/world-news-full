@@ -588,6 +588,10 @@ async fn article(
             let history = intake.history(&session, &id, None, size()).await?;
 
             let mut v = page(&state, &session, &r.title);
+            v.links.push(Link {
+                label: "Examiner l’origine documentée et ses justificatifs".into(),
+                href: super::origins::route(&id),
+            });
 
             v.paragraphs.push(format!(
                 "Attribution enregistrée : {} · Langue : {} · État : {}.",
