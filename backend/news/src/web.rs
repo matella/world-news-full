@@ -1,7 +1,10 @@
 use crate::{
     auth::AuthService,
     config::Config,
-    content::{ArticleKind, ContentBlock, EditionCursor, PageSize, Revision, SourceLink, valid_id},
+    content::{
+        ArticleKind, ContentBlock, EditionCursor, PageSize, Revision, SectionBlock, SourceLink,
+        valid_id,
+    },
     error::AppError,
     persistence,
     repository::Repository,

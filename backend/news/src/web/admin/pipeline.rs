@@ -2,7 +2,7 @@ use super::super::{AppState, message, path_segment, with_query};
 
 use crate::{
     auth::{Role, Session},
-    content::{ArticleFormat, ArticleKind, ContentBlock, PageSize},
+    content::{ArticleFormat, ArticleKind, ContentBlock, PageSize, Revision, SectionBlock},
     editorial::{EditorialService, RevisionInput},
     error::AppError,
     intake::{
@@ -44,6 +44,7 @@ struct View {
     tables: Vec<Table>,
     forms: Vec<FormSpec>,
     next: Option<String>,
+    article: Option<Revision>,
 }
 struct Link {
     label: String,
@@ -157,6 +158,7 @@ fn page(state: &AppState, session: &Session, title: impl Into<String>) -> View {
         tables: vec![],
         forms: vec![],
         next: None,
+        article: None,
     }
 }
 fn publisher(session: &Session) -> bool {
@@ -1043,7 +1045,7 @@ async fn view_draft(
         v.paragraphs.push(format!(
             "Version privée · {} · {}. La création d’un brouillon ne le publie pas.",
             revision.language,
-            revision.format.as_str()
+            revision.format.label()
         ));
 
         let projection = state.config.taxonomy.project(&revision.topics, &revision.geography);
@@ -1061,10 +1063,7 @@ async fn view_draft(
         }
         fields.push(field("reason", "Motif du classement", "", "textarea", true));
         v.forms.push(FormSpec {title:"Classer cette version".into(), action:action("drafts", &id, "classification"), button:"Enregistrer le classement dans une nouvelle version".into(), fields});
-        v.paragraphs
-            .extend(revision.body.into_iter().map(|b| match b {
-                ContentBlock::Paragraph { text } | ContentBlock::Heading { text, .. } => text,
-            }));
+        v.article=Some(revision);
 
         Ok(v)
     }

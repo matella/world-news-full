@@ -15,13 +15,7 @@
 <article lang="{{ revision.language }}">
 {% if legacy %}<p>Archive importée. Le processus de génération et la vérification d’origine ne sont pas attestés.</p>{% endif %}
 <p>Révision conservée : <time>{{ revision.created_at }}</time>.</p>
-{% if let Some(text) = revision.standfirst %}<p>{{ text }}</p>{% endif %}
-{% for block in revision.body %}
-{% match block %}
-{% when ContentBlock::Paragraph { text } %}<p>{{ text }}</p>
-{% when ContentBlock::Heading { text, level } %}{% if *level == 2 %}<h2>{{ text }}</h2>{% else %}<h3>{{ text }}</h3>{% endif %}
-{% endmatch %}
-{% endfor %}
+{% include "article_body.html" %}
 <section aria-labelledby="sources"><h2 id="sources">Sources et références</h2>
 {% if sources.is_empty() %}<p>Aucune référence disponible pour cette révision.</p>{% else %}
 <ul>{% for source in sources %}<li><a href="{{ source.original_url }}" rel="noopener noreferrer">{{ source.source_name }}</a></li>{% endfor %}</ul>
