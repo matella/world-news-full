@@ -16,6 +16,7 @@ fn state(timeout: Duration) -> AppState {
         config: Arc::new(config),
         pool,
         request_timeout: timeout,
+        auth: None,
     }
 }
 async fn app() -> Router {
@@ -196,6 +197,9 @@ async fn unimplemented_features_fail_honestly_and_writes_are_unavailable() {
         .map(str::trim)
         .collect();
     assert_eq!(methods, ["GET", "HEAD"]);
+    let logout = request(app.clone(), "GET", "/admin/logout", Body::empty()).await;
+    assert_eq!(logout.status(), StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(logout.headers()["allow"], "POST");
     assert_eq!(
         request(app.clone(), "OPTIONS", "/admin", Body::empty())
             .await

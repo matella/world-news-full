@@ -1,4 +1,5 @@
 use crate::{
+    auth::AuthService,
     config::Config,
     content::{ArticleKind, ContentBlock, EditionCursor, PageSize, Revision, SourceLink, valid_id},
     error::AppError,
@@ -36,6 +37,7 @@ struct AppState {
     config: Arc<Config>,
     pool: PgPool,
     request_timeout: Duration,
+    auth: Option<Arc<AuthService>>,
 }
 #[derive(Clone)]
 struct QueryValues(BTreeMap<String, String>);
@@ -82,11 +84,26 @@ impl Page {
 }
 
 pub fn router(config: Arc<Config>, pool: PgPool) -> Router {
+    let editor_pool = persistence::editor_pool(&config);
+    router_with_editor(config, pool, editor_pool)
+}
+pub fn router_with_editor(
+    config: Arc<Config>,
+    pool: PgPool,
+    editor_pool: Option<PgPool>,
+) -> Router {
+    let auth = if config.admin_enabled() {
+        editor_pool.map(|pool| Arc::new(AuthService::new(pool, &config.public_url)))
+    } else {
+        None
+    };
     let state = AppState {
         config,
         pool,
         request_timeout: REQUEST_TIMEOUT,
+        auth,
     };
+    let admin_routes = admin::routes(state.clone());
     with_boundary(
         Router::new()
             .route("/", get(home))
@@ -95,8 +112,7 @@ pub fn router(config: Arc<Config>, pool: PgPool) -> Router {
             .route("/archive", get(archive))
             .route("/recherche", get(search))
             .route("/sujets", get(topics))
-            .route("/admin", get(admin))
-            .route("/admin/{*rest}", get(admin))
+            .merge(admin_routes)
             .route("/health/live", get(live))
             .route("/health/ready", get(ready))
             .fallback(not_found)
@@ -367,27 +383,24 @@ async fn topics(State(state): State<AppState>) -> Response {
         "La navigation par sujet n’est pas encore disponible.",
     )
 }
-async fn admin(State(state): State<AppState>) -> Response {
-    message(
-        &state.config,
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Administration indisponible",
-        "L’espace de publication n’est pas encore disponible.",
-    )
-}
 async fn not_found(State(state): State<AppState>) -> Response {
     render(&state.config, Err(AppError::NotFound))
 }
-async fn method_not_allowed(State(state): State<AppState>) -> Response {
+async fn method_not_allowed(State(state): State<AppState>, request: Request) -> Response {
+    let allow = match request.uri().path() {
+        "/admin/login" => "GET, HEAD, POST",
+        "/admin/logout" => "POST",
+        _ => "GET, HEAD",
+    };
     let mut response = message(
         &state.config,
         StatusCode::METHOD_NOT_ALLOWED,
         "Méthode non autorisée",
-        "Cette adresse accepte uniquement la lecture.",
+        "Cette adresse n’accepte pas la méthode utilisée.",
     );
     response
         .headers_mut()
-        .insert(header::ALLOW, HeaderValue::from_static("GET, HEAD"));
+        .insert(header::ALLOW, HeaderValue::from_static(allow));
     response
 }
 async fn live() -> Json<Value> {
@@ -564,14 +577,16 @@ async fn request_boundary(State(state): State<AppState>, request: Request, next:
         "x-content-type-options",
         HeaderValue::from_static("nosniff"),
     );
-    headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
+    // no-referrer makes Chromium send Origin:null on same-origin form POSTs.
+    // Keep same-origin form provenance while withholding external referrers.
+    headers.insert("referrer-policy", HeaderValue::from_static("same-origin"));
     headers.insert(
         "content-security-policy",
         HeaderValue::from_static(
             "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
         ),
     );
-    if status.is_client_error() || status.is_server_error() {
+    if status.is_client_error() || status.is_server_error() || route.starts_with("/admin") {
         headers.insert("x-robots-tag", HeaderValue::from_static("noindex"));
     }
     if status == StatusCode::SERVICE_UNAVAILABLE {
@@ -597,5 +612,6 @@ async fn request_boundary(State(state): State<AppState>, request: Request, next:
     response
 }
 
+mod admin;
 #[cfg(test)]
 mod tests;

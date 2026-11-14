@@ -25,6 +25,8 @@ bounded pool after draining HTTP work. No Node, Jarvis or AI provider is needed.
 | `BIND_ADDR` | IP:port, defaults loopback port 3001. |
 | `NEWS_MASTHEAD` | 1–120 characters, template-escaped; defaults The World Brief. |
 | `NEWS_EDITORIAL_CONFIG` | Optional JSON file path; otherwise compiles repository `config/editorial.json` as the default. |
+| `NEWS_ADMIN_ENABLED` | `false` by default; `true` requires an explicit admin runtime connection and safe public origin. |
+| `EDITOR_DATABASE_URL` | Private admin-runtime credential for the same DB target; no runtime schema/account ownership. |
 
 Production database TLS uses hostname/certificate verification (`verify-full`).
 An explicit weaker `sslmode` is rejected; configure the database trust chain before
@@ -51,8 +53,9 @@ and checksum via a restricted metadata view; absent/partial/drifted schemas retu
 503. Complete-pipeline freshness remains #44. Minimal HTML views now read published
 editions/stories/archives from restricted views. Empty archives return 200; missing
 public resources return 404; DB/schema outages return 503. `/recherche` and `/sujets`
-return explicit 501 while their implementation is pending. Admin reads return 503,
-and known-route mutations return 405. No publication endpoint or permissive CORS.
+return explicit 501 while their implementation is pending. Admin is disabled by
+default; when explicitly configured, local identity/session/CSRF checks protect
+its dashboard and logout. No publication endpoint or permissive CORS.
 See the [HTTP contract](../../docs/http-contract.md) for validation, canonical URLs,
 request IDs, timeout/body limits and what remains in the reader issues.
 
@@ -104,3 +107,18 @@ fingerprints reuse the existing sha2 0.10 dependency (MIT/Apache-2.0); they esta
 idempotency, not authenticity. JSON arbitrary precision preserves numeric values.
 `http-body-util`, already locked for tests and used by Axum, is also a runtime
 dependency for identifying actual streamed-body limit failures (MIT licensed).
+
+## Local admin identity
+
+Read [setup/session documentation](../../docs/admin-auth.md) and
+[ADR 0003](../../docs/architecture/0003-local-admin.md). Explicit `--create-admin USER
+editor|publisher` reads a chosen password from stdin; `--disable-admin USER` revokes
+that identity's sessions. Neither runs at startup. Use an authorised migration/
+bootstrap credential only for CLI operations, separate from runtime connections.
+No real identities are provisioned by development/tests.
+
+Argon2 0.6.0 and cookie 0.18.2 are current inspected Rust-compatible releases
+(MIT/Apache-2.0); getrandom, subtle and zeroize reuse locked versions. Eighteen
+transitive packages implement maintained hashing/PHC/cookie/time primitives. A
+complete security audit, live TLS/proxy/grant verification and actual editorial
+publication remain separate gates; the dashboard explicitly says so.

@@ -30,6 +30,11 @@ def main():
     bad = dict(env, DATABASE_URL="https://fixture:synthetic-private@localhost/news")
     result = subprocess.run([binary, "--check-config"], env=bad, capture_output=True, timeout=10)
     assert result.returncode != 0 and b"synthetic-private" not in result.stdout + result.stderr
+    oversized = subprocess.run([binary, "--create-admin", "synthetic-user", "editor"],
+                               input=b"x" * 1024 + b"\r\nextra", env=env,
+                               capture_output=True, timeout=10)
+    assert oversized.returncode != 0
+    assert b"exceeds bootstrap limit" in oversized.stderr
     opener = build_opener(ProxyHandler({}))
 
     def request(path):

@@ -1,5 +1,5 @@
 use std::{path::Path, process::ExitCode, sync::Arc};
-use world_news::{config::Config, legacy, persistence, web};
+use world_news::{auth, config::Config, legacy, persistence, web};
 
 #[tokio::main]
 async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
@@ -40,6 +40,44 @@ async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
     let pool = persistence::pool(&config);
+    if arguments.first().is_some_and(|a| a == "--create-admin") {
+        if arguments.len() != 3 {
+            return Err(
+                "Usage: world-news --create-admin USER editor|publisher; password on stdin".into(),
+            );
+        }
+        let role = auth::Role::parse(&arguments[2])?;
+        use std::io::Read;
+        let mut password = zeroize::Zeroizing::new(String::new());
+        std::io::stdin()
+            .take(1027)
+            .read_to_string(&mut password)
+            .map_err(|_| std::io::Error::other("Cannot read password from stdin."))?;
+        if password.len() > 1026 {
+            return Err("Password input exceeds bootstrap limit.".into());
+        }
+        if password.ends_with('\n') {
+            password.pop();
+            if password.ends_with('\r') {
+                password.pop();
+            }
+        }
+        let result = auth::bootstrap(&pool, &arguments[1], role, password).await;
+        pool.close().await;
+        result?;
+        println!("Account created; no default credentials or automatic sign-in.");
+        return Ok(ExitCode::SUCCESS);
+    }
+    if arguments.first().is_some_and(|a| a == "--disable-admin") {
+        if arguments.len() != 2 {
+            return Err("Usage: world-news --disable-admin USER".into());
+        }
+        let result = auth::disable(&pool, &arguments[1]).await;
+        pool.close().await;
+        result?;
+        println!("Account disabled; all its sessions revoked.");
+        return Ok(ExitCode::SUCCESS);
+    }
     if arguments == ["--migrate"] {
         let result = persistence::migrate(&pool).await;
         pool.close().await;
@@ -53,16 +91,23 @@ async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
     }
     if !arguments.is_empty() {
         return Err(
-            "Usage: world-news [--check-config | --migrate | --import-legacy FILE [--apply]]"
+            "Usage: world-news [--check-config | --migrate | --import-legacy FILE [--dry-run | --apply] | --create-admin USER editor|publisher | --disable-admin USER]"
                 .into(),
         );
     }
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
+    let editor_pool = persistence::editor_pool(&config);
     tracing::info!(address = %listener.local_addr()?, "Rust newspaper foundation listening");
-    axum::serve(listener, web::router(config, pool.clone()))
-        .with_graceful_shutdown(shutdown())
-        .await?;
+    axum::serve(
+        listener,
+        web::router_with_editor(config, pool.clone(), editor_pool.clone()),
+    )
+    .with_graceful_shutdown(shutdown())
+    .await?;
     pool.close().await;
+    if let Some(editor_pool) = editor_pool {
+        editor_pool.close().await;
+    }
     Ok(ExitCode::SUCCESS)
 }
 
