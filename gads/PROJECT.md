@@ -72,6 +72,14 @@ are proposals; preserve raw payloads/frozen snapshots and explicit unknowns. Edi
 classification changes create a versioned candidate, retain prose/citations/original
 provenance and invalidate review; do not transfer old translation/review approval.
 
+Threads are explicit primary subject identities, separate from multi-valued topics.
+Never auto-merge legacy related IDs or similar titles. Curation requires a live
+publisher, versions and reason; preserve before/after history and exact-state undo.
+Keep unknown update times unknown, and reader heads/counts limited to public members.
+Use the bounded public views/resolver and repeatable timeline snapshot, not private
+tables or separate racing resolve/member reads. See docs/story-threads.md; editor/
+reader consumers remain their own gates. Never delete identity/history for rollback.
+
 ## Commands and evidence
 
 | Purpose | Command from repository root |
