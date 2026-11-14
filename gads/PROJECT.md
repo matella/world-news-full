@@ -53,6 +53,12 @@ The combined worker is explicit, budgeted and capped; feed IDs are an exact boun
 JSON allowlist and extraction requires opt-in plus publisher grants. Interrupted
 reports are partial observations, never pipeline health or publication success.
 
+Private pipeline administration must use the editor pool and live service/session/
+role/version checks. Keep lists bounded and source values escaped. Publisher retry/
+pause/configuration actions never execute source HTTP or publish. Source text storage
+removal requires a concrete versioned confirmation; manual notes/original drafts
+remain distinct from retained publisher text. Do not widen public reader authority.
+
 ## Commands and evidence
 
 | Purpose | Command from repository root |
@@ -62,6 +68,7 @@ reports are partial observations, never pipeline health or publication success.
 | Transitional frontend | `cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm run build` (explicit DATABASE_URL required) |
 | Current Rust skeleton | `cargo build --workspace --locked` |
 | New Rust foundation | `cargo run -p world-news -- --check-config`, `cargo run -p world-news` (DATABASE_URL required; default port 3001) |
+| Protected pipeline UI | `/admin/pipeline` and source/feed/article/job forms; see docs/pipeline-admin.md; `WORLDNEWS_BROWSER_CHECK=1 python3 scripts/test_database.py` adds real Chromium workflow |
 | Bounded intake orchestration | `world-news --work-intake-once`; default no feed HTTP/extraction; typed allowlist/caps/budget in docs/intake-worker.md |
 | Explicit selected feed / recovery | `world-news --poll-feed-once ID` (can fetch) / `world-news --recover-feed-leases-once` (no HTTP); see docs/feed-recovery.md; no startup scheduler |
 | Explicit normalization worker | `world-news --work-normalization-once` with an isolated worker DATABASE_URL; see docs/normalization-jobs.md; no startup scheduler |

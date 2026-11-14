@@ -89,11 +89,18 @@ source implementation and disposable tests continue without production access.
   execution, retry/recovery and shared manual/machine source cooldowns. Twelve DB
   suites passed; final local checks/CI are recorded in the evidence and linked PR.
 
-- Bounded worker branch, based on #65: fourth #21 slice with an explicit exact
+- PR #66, based on #65: fourth #21 slice with an explicit exact
   feed allowlist, opt-in granted extraction, capped stage work and interruption
   reporting. Thirteen disposable DB suites include full intake and real CLI
   timeout/default checks. Final local checks/CI are linked in the evidence/PR.
 
-Next: #22 protected pipeline administration, then
-article/citation/length/editor and edition policy. Service success does not complete
-those issues or authorise a live release.
+- Pipeline administration branch, based on #66: #22 protected measured status,
+  bounded source/feed/article/job screens, authorized configuration/recovery/grants,
+  manual notes and original private drafts. Fourteen isolated DB suites and real
+  Chromium source/feed/intake/draft/mobile checks passed; source storage removal
+  requires explicit versioned confirmation. See docs/evidence/pipeline-admin.md.
+
+Next: #23 reader Jarvis decoupling and staged handoff, followed by taxonomy/threads,
+article/citation/length/editor and edition policy. Independent edition-publication
+acceptance remains gated on #29–#31; service success does not complete those issues
+or authorize a live release.

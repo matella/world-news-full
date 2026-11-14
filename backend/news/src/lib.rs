@@ -6,6 +6,7 @@ pub mod editorial;
 pub mod error;
 pub mod intake;
 pub mod legacy;
+pub mod operations;
 pub mod persistence;
 pub mod registry;
 pub mod repository;
