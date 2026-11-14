@@ -219,3 +219,13 @@ cooldowns gate both manual and queued extraction. The explicit
 See [operations](../../docs/extraction-jobs.md) and
 [ADR 0011](../../docs/architecture/0011-authorized-extraction-jobs.md). Bounded
 orchestration is the next #21 step; the web process still starts no background work.
+
+## Bounded worker orchestration
+
+`world-news --work-intake-once` performs bounded feed recovery, exact allowlisted
+feed checks, capped normalization and opt-in granted extraction. Defaults make no
+source HTTP requests. Fixed partial stage reports distinguish timeout/errors from
+completed work; durable leases remain recoverable. No worker starts with the web
+server. See [policy/operations](../../docs/intake-worker.md) and
+[ADR 0012](../../docs/architecture/0012-bounded-intake-worker.md). Live scheduling,
+identities, source selection and release remain explicit environment decisions.

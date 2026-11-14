@@ -1,8 +1,17 @@
 use std::{path::Path, process::ExitCode, sync::Arc};
 use world_news::{auth, config::Config, legacy, persistence, web};
 
-#[tokio::main]
-async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
+fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let result = runtime.block_on(run());
+    // Native DNS/parser tasks can outlive a cancelled worker budget. They hold no
+    // DB transaction; do not wait indefinitely for blocking work during CLI exit.
+    runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    result
+}
+async fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .init();
@@ -81,6 +90,19 @@ async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
             ExitCode::from(2)
         } else {
             ExitCode::SUCCESS
+        });
+    }
+    if arguments == ["--work-intake-once"] {
+        let policy = world_news::worker::WorkerPolicy::from_env().map_err(std::io::Error::other)?;
+        let worker = world_news::worker::IntakeWorker::new(pool.clone(), &config.public_url)
+            .map_err(|e| std::io::Error::other(e.category()))?;
+        let report = worker.run_once(&policy).await;
+        pool.close().await;
+        println!("{}", serde_json::to_string(&report)?);
+        return Ok(if report.succeeded() {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(2)
         });
     }
     if arguments == ["--work-extraction-once"] {
