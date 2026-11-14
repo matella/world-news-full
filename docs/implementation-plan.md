@@ -206,3 +206,14 @@ input recovery. New assertions require fresh private justification and retain
 existing citation snapshots. See ADR 0023 and docs/article-origins.md. No schema,
 provider, HTTP article-publication or live change is introduced. Origin registry/
 thread administration and the complete editorial publication journey remain open.
+
+## Stable origin registry interface
+
+PR #80 is merged at d1ab93a7787d1769e83f4e72053cd00c3f76ac5d after all workflows
+passed. The next #29 slice makes origin identities operable: bounded private
+directory, explicit publisher creation, immutable identity/source association,
+versioned availability/private-note updates and private audit history supporting
+both stored event formats. See ADR 0024 and docs/source-registry.md. Registry
+configuration remains separate from article evidence. No schema/dependency,
+source HTTP, article-publication route or live change is introduced. Audited thread
+controls and complete author/review/publish/correct/withdraw acceptance remain.

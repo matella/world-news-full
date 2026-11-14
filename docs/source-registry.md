@@ -73,7 +73,7 @@ captured labels. Legacy raw records keep the original payload for reconciliation
 The registry runtime needs the auth runtime grants, SELECT/INSERT on sources,
 feeds, reporting_origins, source_origin_links; column UPDATE for editable config/
 lock_version; DELETE only on source_origin_links for atomic configuration replacement;
-INSERT registry_actions and USAGE registry_actions_id_seq. It cannot delete sources/
+SELECT/INSERT registry_actions and USAGE registry_actions_id_seq. It cannot delete sources/
 feeds/origins, update/delete audit, control accounts or own schema. Public readers
 receive none of these tables, only existing public views. The disposable test role
 proves these boundaries; no real role grants are provisioned here.
@@ -81,9 +81,41 @@ proves these boundaries; no real role grants are provisioned here.
 Tests cover v5 -> v6 with old claimed rights/attribution, strict session permissions,
 version conflicts, source/feed disable, origin hints versus article assignments,
 rights validation, secret URL rejection, preserved historical citations, captured
-new labels and transaction rollback. `scripts/test_database.py` runs the six fresh
-DB suites explicitly; ordinary cargo test intentionally ignores DB-dependent tests.
+new labels and transaction rollback. `scripts/test_database.py` now runs all 19
+disposable DB suites; ordinary cargo test intentionally ignores DB-dependent tests.
+`WORLDNEWS_BROWSER_CHECK=1` also runs the six current Chromium journeys.
 
-No new dependency or network service is introduced. Admin screens, resilient fetch,
-rights-aware extraction and job execution remain #18–#22. Production release and
-backup/rollback remain separate gates; keep a matching schema-version binary.
+No new dependency or network service is introduced. Source/feed/pipeline screens,
+resilient fetch, rights-aware extraction and jobs landed under #18–#22. Complete
+editorial publication acceptance remains #29. Production release and backup/rollback
+remain separate gates; keep a matching schema-version binary.
+
+## Private origin registry
+
+`/admin/editor/origins` provides a bounded directory and, for publishers, an explicit
+identity-creation form. Choose a stable ID, name and optional configured source ID;
+the source directory is linked for reference. New entries start unavailable unless
+the publisher explicitly enables them. These registry associations remain hints,
+never article-specific reporting proof or rights grants.
+
+`/admin/editor/origins/{id}` shows current configuration and paged private history.
+Publishers can change availability and the private registry note. Existing name,
+source association and ID are read-only and protected by the service, including
+forged requests. To represent a different identity, create another entry while
+preserving historical records. Disabling prevents new assertions selecting that
+identity and makes affected captured proof require reexamination; it does not erase
+old labels, evidence, citations or notes.
+
+Every save uses a live publisher transaction, expected version and the existing
+audit service. Readers of this private interface need editor permission; anonymous
+readers receive no registry/audit access. Stale or invalid saves return recoverable
+submitted fields without overwriting stored configuration. Notes remain private;
+old/new notes and actors are retained in the immutable audit. The history reader
+supports both typed-record and historical raw-row event formats. Empty historical
+journals do not certify that no pre-import changes occurred.
+
+The shared pipeline textarea uses a sentinel newline so a leading stored newline
+survives HTML parsing. No automatic source HTTP, evidence assertion, citation refresh
+or article publication is performed. Schema and dependencies are unchanged. See ADR
+0024 and the scoped evidence record; thread controls and the complete #29 publishing
+journey remain open. No live account/grant, data, writer, traffic or release change.

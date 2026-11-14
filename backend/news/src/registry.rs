@@ -627,3 +627,34 @@ mod tests {
         assert!(registry_url("https://source.invalid/terms#reuse"));
     }
 }
+
+/// Private audit projection. Notes and actor identities never belong in reader views.
+#[derive(sqlx::FromRow)]
+pub struct OriginChange {
+    pub id: i64,
+    pub version: i64,
+    pub actor_id: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub enabled: bool,
+    pub note: Option<String>,
+}
+impl Registry {
+    pub async fn origin_history(
+        &self,
+        session: &Session,
+        id: &str,
+        before: Option<i64>,
+        size: PageSize,
+    ) -> Result<Vec<OriginChange>, AppError> {
+        check_id(id)?;
+        if before.is_some_and(|n| n <= 0) {
+            return Err(AppError::Validation("Invalid registry history cursor."));
+        }
+        let (mut tx, _) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
+        // save_origin captures a typed Record; historical disable captures the raw row.
+        let rows=sqlx::query_as("SELECT id,lock_version AS version,actor_id,created_at,COALESCE((after_record#>>'{spec,enabled}')::boolean,(after_record->>'enabled')::boolean) AS enabled,COALESCE(after_record#>>'{spec,note}',after_record->>'note') AS note FROM news.registry_actions WHERE entity_type='origin' AND entity_id=$1 AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT $3")
+            .bind(id).bind(before).bind(i64::from(size.get())).fetch_all(&mut *tx).await.map_err(db)?;
+        commit(tx).await?;
+        Ok(rows)
+    }
+}
