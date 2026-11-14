@@ -1,14 +1,43 @@
-use std::sync::Arc;
-use world_news::{config::Config, persistence, web};
+use std::{path::Path, process::ExitCode, sync::Arc};
+use world_news::{config::Config, legacy, persistence, web};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
-    let config = Arc::new(Config::from_env().map_err(std::io::Error::other)?);
+async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments
+        .first()
+        .is_some_and(|arg| arg == "--import-legacy")
+    {
+        if !(arguments.len() == 2
+            || (arguments.len() == 3 && matches!(arguments[2].as_str(), "--apply" | "--dry-run")))
+        {
+            return Err("Usage: world-news --import-legacy FILE [--dry-run | --apply]".into());
+        }
+        let policy = Config::editorial_from_env().map_err(std::io::Error::other)?;
+        let plan = legacy::plan_file(Path::new(&arguments[1]), &policy.publication_timezone)?;
+        let report = if arguments.get(2).is_some_and(|arg| arg == "--apply") {
+            let config = Config::from_env().map_err(std::io::Error::other)?;
+            let pool = persistence::pool(&config);
+            let result = legacy::apply(&pool, &plan).await;
+            pool.close().await;
+            result?
+        } else {
+            plan.report
+        };
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(if report.quarantined.is_empty() {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(2)
+        });
+    }
+    let config = Arc::new(Config::from_env().map_err(std::io::Error::other)?);
     if arguments == ["--check-config"] {
         println!("Configuration valid; no database connection or provider request made.");
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
     let pool = persistence::pool(&config);
     if arguments == ["--migrate"] {
@@ -20,10 +49,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         })?;
         println!("App-owned schema migrated successfully.");
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
     if !arguments.is_empty() {
-        return Err("Usage: world-news [--check-config | --migrate]".into());
+        return Err(
+            "Usage: world-news [--check-config | --migrate | --import-legacy FILE [--apply]]"
+                .into(),
+        );
     }
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "Rust newspaper foundation listening");
@@ -31,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_graceful_shutdown(shutdown())
         .await?;
     pool.close().await;
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }
 
 async fn shutdown() {
