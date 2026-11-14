@@ -99,16 +99,19 @@ fn package(limits: bool) -> SourcePackage {
         }),
         bindings: vec![
             Binding {
+                origin_version: None,
                 source_article_id: "a".into(),
                 anchor_id: Some("one".into()),
                 location: Some("Paragraph 2 <script>plain locator</script>".into()),
             },
             Binding {
+                origin_version: None,
                 source_article_id: "b".into(),
                 anchor_id: Some("two".into()),
                 location: None,
             },
             Binding {
+                origin_version: None,
                 source_article_id: "c".into(),
                 anchor_id: Some("three".into()),
                 location: Some("Page 4".into()),
@@ -692,6 +695,168 @@ async fn citations_enforce_revision_attribution_and_preserve_public_private_boun
             .await,
         Err(AppError::Validation(_))
     ));
+    // A workbench proposal preserves frozen evidence and never attaches it implicitly.
+    let proposal = service.evidence_draft(&editor, "single").await.unwrap();
+    assert!(proposal.proposed);
+    assert!(!proposal.package.bindings.is_empty());
+    assert!(
+        proposal
+            .package
+            .bindings
+            .iter()
+            .all(|b| b.origin_version.is_some())
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM news.citations WHERE revision_id=$1")
+            .bind(&proposal.revision.id)
+            .fetch_one(&owner)
+            .await
+            .unwrap(),
+        0
+    );
+    let frozen = service.evidence_draft(&editor, "sourced").await.unwrap();
+    assert!(!frozen.proposed);
+    let captured = frozen
+        .package
+        .bindings
+        .iter()
+        .find(|b| b.source_article_id == "a")
+        .unwrap()
+        .origin_version
+        .unwrap();
+    origins
+        .assert(
+            &publisher,
+            "a",
+            3,
+            OriginInput {
+                state: OriginState::Unknown,
+                origin_ids: vec![],
+                public_basis: "New unresolved evidence".into(),
+                private_note: "PRIVATE-WORKBENCH-ORIGIN".into(),
+            },
+        )
+        .await
+        .unwrap();
+    let pinned = service
+        .source_revision(
+            &editor,
+            "sourced",
+            frozen.head.lock_version,
+            frozen.package,
+            "Retain frozen evidence until explicitly refreshed",
+        )
+        .await
+        .unwrap();
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT origin_version FROM news.citations WHERE revision_id=$1 AND source_article_id='a'").bind(&pinned.current_revision_id).fetch_one(&owner).await.unwrap(),captured);
+    let pinned = approve(&service, &publisher, "sourced", pinned).await;
+    assert!(matches!(
+        service
+            .publish(
+                &publisher,
+                "sourced",
+                pinned.lock_version,
+                "Pinned stale origins must block publication"
+            )
+            .await,
+        Err(AppError::Validation(_))
+    ));
+    let old = service.head(&editor, "historical").await.unwrap();
+    let old_published = old.published_revision_id.clone();
+    let mut edit = draft();
+    edit.kind = ArticleKind::LegacySummary;
+    edit.evidence = None;
+    edit.body = vec![ContentBlock::Paragraph {
+        text: "Human correction of preserved historical prose".into(),
+    }];
+    let edited = service
+        .revise(&editor, "historical", old.lock_version, edit)
+        .await
+        .unwrap();
+    let lineage: serde_json::Value =
+        sqlx::query_scalar("SELECT provenance FROM news.story_revisions WHERE id=$1")
+            .bind(&edited.current_revision_id)
+            .fetch_one(&owner)
+            .await
+            .unwrap();
+    assert_eq!(lineage["pipeline"], "legacy_jarvis");
+    assert_eq!(lineage["edited_from"], old.current_revision_id);
+    assert!(lineage["sourcing"].is_null());
+    assert_eq!(edited.published_revision_id, old_published);
+    assert!(
+        service
+            .revise(&editor, "historical", edited.lock_version, draft())
+            .await
+            .is_err()
+    );
+    let mut fake_kind = draft();
+    fake_kind.kind = ArticleKind::LegacySummary;
+    assert!(
+        service
+            .create(&editor, "fabricated-import", fake_kind)
+            .await
+            .is_err()
+    );
+    let pending = service
+        .create(&editor, "pending-workbench", draft())
+        .await
+        .unwrap();
+    service
+        .submit(&editor, "pending-workbench", pending.lock_version)
+        .await
+        .unwrap();
+    use world_news::editorial::DraftFilter;
+    let mut cursor = None;
+    let mut ids = std::collections::BTreeSet::new();
+    loop {
+        let page = service
+            .drafts(
+                &editor,
+                DraftFilter::All,
+                cursor.as_ref(),
+                PageSize::new(1).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(page.items.len() <= 1);
+        for card in page.items {
+            assert!(ids.insert(card.id));
+        }
+        cursor = page.next;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    assert!(
+        ids.contains("historical") && ids.contains("sourced") && ids.contains("pending-workbench")
+    );
+    let review = service
+        .drafts(
+            &editor,
+            DraftFilter::InReview,
+            None,
+            PageSize::new(20).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(review.items.len(), 1);
+    assert_eq!(review.items[0].id, "pending-workbench");
+    let published = service
+        .drafts(
+            &editor,
+            DraftFilter::Published,
+            None,
+            PageSize::new(20).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(published.items.iter().all(|c| c.state == "published"));
+    assert!(
+        world_news::editorial::EditorialService::new(reader.clone())
+            .drafts(&editor, DraftFilter::All, None, PageSize::new(20).unwrap())
+            .await
+            .is_err()
+    );
     sqlx::query("UPDATE news.admin_sessions SET revoked_at=now() WHERE user_id='citation-editor'")
         .execute(&owner)
         .await
@@ -708,6 +873,13 @@ async fn citations_enforce_revision_attribution_and_preserve_public_private_boun
             .await
             .is_err()
     );
+    assert!(
+        service
+            .drafts(&editor, DraftFilter::All, None, PageSize::new(20).unwrap())
+            .await
+            .is_err()
+    );
+    assert!(service.evidence_draft(&editor, "sourced").await.is_err());
     owner.close().await;
     reader.close().await;
 }
