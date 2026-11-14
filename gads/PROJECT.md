@@ -49,6 +49,9 @@ a human actor or persist a session for machine work. Share source retry minimums
 Feed completion must hold a live attempt fence and atomically enqueue normalization
 before cache advancement. Recover abandoned attempts explicitly; never reset leases
 silently. Preserve Retry-After minimums and unknown historical holds across resume.
+The combined worker is explicit, budgeted and capped; feed IDs are an exact bounded
+JSON allowlist and extraction requires opt-in plus publisher grants. Interrupted
+reports are partial observations, never pipeline health or publication success.
 
 ## Commands and evidence
 
@@ -59,6 +62,7 @@ silently. Preserve Retry-After minimums and unknown historical holds across resu
 | Transitional frontend | `cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm run build` (explicit DATABASE_URL required) |
 | Current Rust skeleton | `cargo build --workspace --locked` |
 | New Rust foundation | `cargo run -p world-news -- --check-config`, `cargo run -p world-news` (DATABASE_URL required; default port 3001) |
+| Bounded intake orchestration | `world-news --work-intake-once`; default no feed HTTP/extraction; typed allowlist/caps/budget in docs/intake-worker.md |
 | Explicit selected feed / recovery | `world-news --poll-feed-once ID` (can fetch) / `world-news --recover-feed-leases-once` (no HTTP); see docs/feed-recovery.md; no startup scheduler |
 | Explicit normalization worker | `world-news --work-normalization-once` with an isolated worker DATABASE_URL; see docs/normalization-jobs.md; no startup scheduler |
 | Rust process smoke test | `python3 scripts/test_rust_runtime.py` after cargo build |

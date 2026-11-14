@@ -84,11 +84,16 @@ source implementation and disposable tests continue without production access.
   Eleven disposable DB suites include process-kill/recovery and upgrade cases;
   34 unit/in-process and final CLI/process/strict checks passed; both CI workflows passed.
 
-- Authorized extraction branch, based on #64: third #21 slice with expiring
+- PR #65, based on #64: third #21 slice with expiring
   publisher grants, separate machine snapshot attribution, fenced/rights-aware
   execution, retry/recovery and shared manual/machine source cooldowns. Twelve DB
   suites passed; final local checks/CI are recorded in the evidence and linked PR.
 
-Next: #21 bounded orchestration, then admin UI,
+- Bounded worker branch, based on #65: fourth #21 slice with an explicit exact
+  feed allowlist, opt-in granted extraction, capped stage work and interruption
+  reporting. Thirteen disposable DB suites include full intake and real CLI
+  timeout/default checks. Final local checks/CI are linked in the evidence/PR.
+
+Next: #22 protected pipeline administration, then
 article/citation/length/editor and edition policy. Service success does not complete
 those issues or authorise a live release.

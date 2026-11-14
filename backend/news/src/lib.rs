@@ -10,3 +10,4 @@ pub mod persistence;
 pub mod registry;
 pub mod repository;
 pub mod web;
+pub mod worker;
