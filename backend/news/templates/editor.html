@@ -4,29 +4,30 @@
 <main id="main"><h1>{{ title }}</h1>
 {% if let Some(text) = message %}<p role="status">{{ text }}</p>{% endif %}
 {% if let Some(url) = details %}<p><a href="{{ url }}">Voir la version enregistrée, ses sources, son classement et sa longueur</a></p>{% endif %}
+{% if let Some(url) = sources %}<p><a href="{{ url }}">Attribuer les sources et les affirmations</a></p>{% endif %}
 {% if let Some(revision) = article %}<section><h2>Prévisualisation non enregistrée</h2><article lang="{{ revision.language }}"><h3>{{ revision.title }}</h3>{% include "article_body.html" %}{% include "citations.html" %}</article></section>{% endif %}
 {% if let Some(f) = form %}
 <p>Enregistrer crée une nouvelle version privée à relire. Les sources devront être rattachées ; une dérogation de longueur doit être reconfirmée. Le texte n’est jamais publié par ce formulaire.</p>
 <form action="{{ action }}" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="version" value="{{ f.version }}"><input type="hidden" name="revision" value="{{ f.revision }}"><input type="hidden" name="blocks" value="{{ f.rows.len() }}">
 <label>Titre<input name="title" value="{{ f.title }}" required></label>
-<label>Introduction courte<textarea name="standfirst" rows="3">
-{{ f.standfirst }}</textarea></label>
-<label>En bref<textarea name="summary" rows="4">
-{{ f.summary }}</textarea></label>
+<label for="field-standfirst">Introduction courte</label><textarea id="field-standfirst" name="standfirst" rows="3">
+{{ f.standfirst }}</textarea>
+<label for="field-summary">En bref</label><textarea id="field-summary" name="summary" rows="4">
+{{ f.summary }}</textarea>
 <label>Langue du texte<input name="language" value="{{ f.language }}" required></label>
-<label>Format<select name="format">{% for c in formats %}<option value="{{ c.key }}"{% if c.selected %} selected{% endif %}>{{ c.label }}</option>{% endfor %}</select></label>
-<label>Nature de l’article<select name="kind">{% for c in kinds %}<option value="{{ c.key }}"{% if c.selected %} selected{% endif %}>{{ c.label }}</option>{% endfor %}</select></label>
+<label for="field-format">Format</label><select id="field-format" name="format">{% for c in formats %}<option value="{{ c.key }}"{% if c.selected %} selected{% endif %}>{{ c.label }}</option>{% endfor %}</select>
+<label for="field-kind">Nature de l’article</label><select id="field-kind" name="kind">{% for c in kinds %}<option value="{{ c.key }}"{% if c.selected %} selected{% endif %}>{{ c.label }}</option>{% endfor %}</select>
 <h2>Corps de l’article</h2><p>Les affirmations peuvent recevoir des sources après enregistrement. Regroupez les blocs de contexte et d’incertitude dans un encadré chacun.</p>
 {% for row in f.rows %}{% let i = loop.index0 %}<fieldset><legend>Bloc {{ loop.index }}</legend>
-<label>Présentation<select name="kind_{{ i }}">{% for k in block_kinds %}<option value="{{ k.key() }}"{% if *k == row.kind %} selected{% endif %}>{{ k.label() }}</option>{% endfor %}</select></label>
-<label>Texte<textarea name="text_{{ i }}" rows="6">
-{{ row.text }}</textarea></label><input type="hidden" name="claim_{{ i }}" value="{{ row.claim_id }}">
+<label for="field-kind_{{ i }}">Présentation</label><select id="field-kind_{{ i }}" name="kind_{{ i }}">{% for k in block_kinds %}<option value="{{ k.key() }}"{% if *k == row.kind %} selected{% endif %}>{{ k.label() }}</option>{% endfor %}</select>
+<label for="field-text_{{ i }}">Texte</label><textarea id="field-text_{{ i }}" name="text_{{ i }}" rows="6">
+{{ row.text }}</textarea><input type="hidden" name="claim_{{ i }}" value="{{ row.claim_id }}">
 <label><input type="checkbox" name="delete_{{ i }}" value="yes"{% if row.delete %} checked{% endif %}> Supprimer explicitement ce bloc</label></fieldset>{% endfor %}
 <button name="intent" value="add" type="submit" formnovalidate>Ajouter un bloc sans enregistrer</button>
-<label>Motif privé de cette révision<textarea name="reason" rows="3">
-{{ f.reason }}</textarea></label>
-<label>Motif public de dérogation de longueur, si nécessaire<textarea name="override_reason" rows="3">
-{{ f.override_reason }}</textarea></label>
+<label for="field-reason">Motif privé de cette révision</label><textarea id="field-reason" name="reason" rows="3">
+{{ f.reason }}</textarea>
+<label for="field-override_reason">Motif public de dérogation de longueur, si nécessaire</label><textarea id="field-override_reason" name="override_reason" rows="3">
+{{ f.override_reason }}</textarea>
 <button name="intent" value="preview" type="submit">Prévisualiser sans enregistrer</button>
 <button name="intent" value="save" type="submit">Enregistrer une version privée</button></form>
 {% else %}

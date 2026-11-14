@@ -146,3 +146,53 @@ impl EditorialService {
         })
     }
 }
+
+/// Bounded metadata choices plus selected records, never source text or inferred proof.
+#[derive(sqlx::FromRow)]
+pub struct SourceChoice {
+    pub id: String,
+    pub title: String,
+    pub attribution_name: String,
+}
+pub struct SourceChoices {
+    pub items: Vec<SourceChoice>,
+    pub next: Option<String>,
+}
+impl EditorialService {
+    pub async fn source_choices(
+        &self,
+        session: &Session,
+        selected: &[String],
+        after: Option<&str>,
+        source: Option<&str>,
+    ) -> Result<SourceChoices, AppError> {
+        if selected.len() > 200
+            || selected.iter().any(|id| !valid_id(id))
+            || after.is_some_and(|id| !valid_id(id))
+            || source.is_some_and(|id| !valid_id(id))
+        {
+            return Err(AppError::Validation("Invalid source selection filter."));
+        }
+        let (mut tx, _) = self.begin(session, Permission::Edit).await?;
+        let mut page: Vec<SourceChoice> = sqlx::query_as("SELECT id,title,attribution_name FROM news.source_articles WHERE ($1::text IS NULL OR id>$1) AND ($2::text IS NULL OR source_id=$2) ORDER BY id LIMIT 51")
+            .bind(after).bind(source).fetch_all(&mut *tx).await.map_err(|e|AppError::database("source_choices",e))?;
+        let more = page.len() > 50;
+        page.truncate(50);
+        let next = if more {
+            page.last().map(|r| r.id.clone())
+        } else {
+            None
+        };
+        let retained: Vec<SourceChoice> = sqlx::query_as("SELECT id,title,attribution_name FROM news.source_articles WHERE id=ANY($1) ORDER BY id")
+            .bind(selected).fetch_all(&mut *tx).await.map_err(|e|AppError::database("selected_sources",e))?;
+        for row in retained {
+            if !page.iter().any(|p| p.id == row.id) {
+                page.push(row);
+            }
+        }
+        tx.commit()
+            .await
+            .map_err(|e| AppError::database("source_choices", e))?;
+        Ok(SourceChoices { items: page, next })
+    }
+}
