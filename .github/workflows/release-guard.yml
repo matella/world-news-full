@@ -1,0 +1,17 @@
+name: Release held during Rust migration
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  release-not-configured:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Explain the release gate
+        run: |
+          echo "Legacy deployment automation is retired. No remote action was performed."
+          echo "Use docs/operations/code-integration.md and the reviewed release plan."
+          exit 1
