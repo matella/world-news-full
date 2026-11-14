@@ -197,8 +197,8 @@ async fn pipeline_ui_enforces_roles_csrf_versions_and_manual_publishing_boundari
     sqlx::raw_sql("INSERT INTO news.sources(id,name,homepage_url,enabled) VALUES('source-a','Synthetic <img src=x onerror=alert(1)>','https://source.invalid',true); INSERT INTO news.feeds(id,source_id,url,enabled,last_success_at) VALUES('feed-a','source-a','https://source.invalid/rss',true,clock_timestamp()-interval '2 days');
     CREATE ROLE fixture_ops_reader LOGIN PASSWORD 'synthetic-ops-reader'; GRANT USAGE ON SCHEMA news TO fixture_ops_reader; GRANT SELECT ON news.public_stories,news.public_revisions,news.public_editions,news.public_edition_entries,news.public_citations,news.public_notices,news.public_translations,news.schema_version TO fixture_ops_reader;
     CREATE ROLE fixture_ops_writer LOGIN PASSWORD 'synthetic-ops-writer'; GRANT USAGE ON SCHEMA news TO fixture_ops_writer;
-    GRANT SELECT ON news.schema_version,news.admin_users,news.admin_sessions,news.sources,news.feeds,news.reporting_origins,news.source_origin_links,news.registry_actions,news.source_articles,news.feed_fetch_attempts,news.feed_batches,news.normalization_jobs,news.normalization_attempts,news.normalization_job_actions,news.source_observations,news.normalized_batches,news.extraction_jobs,news.extraction_attempts,news.extraction_job_actions,news.intake_snapshots,news.intake_text,news.intake_draft_links,news.stories,news.story_revisions,news.editorial_actions,news.source_extraction_limits TO fixture_ops_writer;
-    GRANT INSERT ON news.admin_sessions,news.admin_audit,news.sources,news.feeds,news.source_origin_links,news.registry_actions,news.source_articles,news.intake_snapshots,news.intake_text,news.intake_draft_links,news.stories,news.story_revisions,news.editorial_actions,news.normalization_jobs,news.normalization_job_actions,news.extraction_jobs,news.extraction_job_actions,news.feed_operational_actions,news.source_extraction_limits TO fixture_ops_writer;
+    GRANT SELECT ON news.publication_events,news.citations,news.schema_version,news.admin_users,news.admin_sessions,news.sources,news.feeds,news.reporting_origins,news.source_origin_links,news.registry_actions,news.source_articles,news.feed_fetch_attempts,news.feed_batches,news.normalization_jobs,news.normalization_attempts,news.normalization_job_actions,news.source_observations,news.normalized_batches,news.extraction_jobs,news.extraction_attempts,news.extraction_job_actions,news.intake_snapshots,news.intake_text,news.intake_draft_links,news.stories,news.story_revisions,news.editorial_actions,news.source_extraction_limits TO fixture_ops_writer;
+    GRANT INSERT ON news.citations,news.admin_sessions,news.admin_audit,news.sources,news.feeds,news.source_origin_links,news.registry_actions,news.source_articles,news.intake_snapshots,news.intake_text,news.intake_draft_links,news.stories,news.story_revisions,news.editorial_actions,news.normalization_jobs,news.normalization_job_actions,news.extraction_jobs,news.extraction_job_actions,news.feed_operational_actions,news.source_extraction_limits TO fixture_ops_writer;
     GRANT UPDATE ON news.sources,news.feeds,news.reporting_origins,news.normalization_jobs,news.normalization_attempts,news.extraction_jobs,news.extraction_attempts,news.source_extraction_limits TO fixture_ops_writer; GRANT DELETE ON news.source_origin_links TO fixture_ops_writer; GRANT UPDATE(failed_attempts,locked_until) ON news.admin_users TO fixture_ops_writer; GRANT UPDATE(revoked_at) ON news.admin_sessions TO fixture_ops_writer; GRANT UPDATE(intake_version,current_intake_id,extraction_state) ON news.source_articles TO fixture_ops_writer; GRANT UPDATE(state,current_revision_id,published_revision_id,review_state,lock_version,updated_at) ON news.stories TO fixture_ops_writer; GRANT UPDATE(outcome,error_category,finished_at,lease_until) ON news.feed_fetch_attempts TO fixture_ops_writer;
     GRANT EXECUTE ON FUNCTION news.lock_source_for_fetch(text),news.extraction_retry_allowed(text) TO fixture_ops_writer; GRANT USAGE ON SEQUENCE news.admin_audit_id_seq,news.registry_actions_id_seq,news.intake_snapshots_id_seq,news.editorial_actions_id_seq,news.normalization_jobs_id_seq,news.normalization_job_actions_id_seq,news.extraction_jobs_id_seq,news.extraction_job_actions_id_seq,news.feed_operational_actions_id_seq TO fixture_ops_writer;
     CREATE ROLE fixture_ops_worker LOGIN PASSWORD 'synthetic-ops-worker'; GRANT USAGE ON SCHEMA news TO fixture_ops_worker; GRANT SELECT ON news.schema_version,news.feed_batches,news.feed_fetch_attempts,news.source_articles,news.normalized_batches,news.source_observations,news.normalization_jobs,news.normalization_attempts TO fixture_ops_worker; GRANT SELECT(id,name) ON news.sources TO fixture_ops_worker; GRANT INSERT ON news.source_articles,news.normalized_batches,news.source_observations,news.normalization_attempts TO fixture_ops_worker; GRANT UPDATE ON news.normalization_jobs,news.normalization_attempts TO fixture_ops_worker; GRANT EXECUTE ON FUNCTION news.lock_source_for_fetch(text),news.lock_feed_for_normalization(text) TO fixture_ops_worker;")
@@ -691,6 +691,144 @@ async fn pipeline_ui_enforces_roles_csrf_versions_and_manual_publishing_boundari
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(count(&owner, "publication_events").await, 0);
+    // Classification edits preserve legacy authorship/content/citations and public pointers.
+    sqlx::raw_sql("INSERT INTO news.stories(id) VALUES('legacy-classify'); INSERT INTO news.story_revisions(id,story_id,number,title,body,language,format,kind,topics,actor_id,provenance) VALUES('legacy-classify-r1','legacy-classify',1,'Historical classification fixture','[{\"type\":\"paragraph\",\"text\":\"Preserved historical content.\"}]','nl','brief','legacy_summary',ARRAY['Monde'],'legacy-import','{\"pipeline\":\"legacy_jarvis\",\"review\":\"unverified\"}'); INSERT INTO news.citations(revision_id,claim_id,source_article_id,location) SELECT 'legacy-classify-r1','claim-a',id,'paragraph 1' FROM news.source_articles ORDER BY id LIMIT 1; INSERT INTO news.publication_events(story_id,revision_id,action,public_reason,actor_id) VALUES('legacy-classify','legacy-classify-r1','imported','Synthetic historical fixture','legacy-import');  UPDATE news.stories SET state='published',current_revision_id='legacy-classify-r1',published_revision_id='legacy-classify-r1',lock_version=1,review_state='approved' WHERE id='legacy-classify'; ").execute(&owner).await.unwrap();
+    let classify_path = "/admin/drafts/legacy-classify/classification";
+    let form_page = text(
+        request(
+            &app,
+            "GET",
+            "/admin/drafts/legacy-classify",
+            Some(&editor),
+            None,
+            String::new(),
+        )
+        .await,
+    )
+    .await;
+    assert!(form_page.contains("Motif du classement"));
+    let choices = [
+        ("version", "1"),
+        ("reason", "Editorial geography verification"),
+        ("topic:politics", "yes"),
+        ("geography:be", "yes"),
+    ];
+    let result = post(&app, classify_path, &editor, &choices).await;
+    assert_eq!(result.status(), StatusCode::SEE_OTHER);
+    let revision: String = sqlx::query_scalar(
+        "SELECT current_revision_id FROM news.stories WHERE id='legacy-classify'",
+    )
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    let stored: (String, String, Vec<String>, Vec<String>, serde_json::Value) = sqlx::query_as(
+        "SELECT language,kind,topics,geography,provenance FROM news.story_revisions WHERE id=$1",
+    )
+    .bind(&revision)
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    assert_eq!(stored.0, "nl");
+    assert_eq!(stored.1, "legacy_summary");
+    assert_eq!(stored.2, vec!["politics"]);
+    assert_eq!(stored.3, vec!["be"]);
+    assert_eq!(stored.4["pipeline"], "legacy_jarvis");
+    assert_eq!(stored.4["classification"]["basis"], "editor_override");
+    assert!(sqlx::query_scalar::<_,bool>("SELECT (a.title,a.standfirst,a.summary,a.body,a.language,a.format,a.kind) IS NOT DISTINCT FROM (b.title,b.standfirst,b.summary,b.body,b.language,b.format,b.kind) FROM news.story_revisions a JOIN news.story_revisions b ON b.id='legacy-classify-r1' WHERE a.id=$1").bind(&revision).fetch_one(&owner).await.unwrap());
+    assert_eq!(
+        sqlx::query_scalar::<_, Vec<String>>(
+            "SELECT topics FROM news.public_stories WHERE id='legacy-classify'"
+        )
+        .fetch_one(&reader)
+        .await
+        .unwrap(),
+        vec!["Monde"]
+    );
+    assert_eq!(
+        stored.4["classification"]["policy_hash"],
+        world_news::taxonomy::Taxonomy::repository().fingerprint()
+    );
+    let pointers: (String, String) = sqlx::query_as(
+        "SELECT published_revision_id,review_state FROM news.stories WHERE id='legacy-classify'",
+    )
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    assert_eq!(pointers, ("legacy-classify-r1".into(), "draft".into()));
+    let old_topics: Vec<String> =
+        sqlx::query_scalar("SELECT topics FROM news.story_revisions WHERE id='legacy-classify-r1'")
+            .fetch_one(&owner)
+            .await
+            .unwrap();
+    assert_eq!(old_topics, vec!["Monde"]);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM news.citations WHERE revision_id=$1")
+            .bind(&revision)
+            .fetch_one(&owner)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        post(&app, classify_path, &editor, &choices).await.status(),
+        StatusCode::CONFLICT
+    );
+    for fields in [
+        vec![
+            ("version", "2"),
+            ("reason", "Invalid duplicate"),
+            ("topic:science", "yes"),
+            ("topic:science", "yes"),
+        ],
+        vec![
+            ("version", "2"),
+            ("reason", "Invalid tag"),
+            ("topic:made-up", "yes"),
+        ],
+        vec![
+            ("version", "2"),
+            ("reason", "Invalid field"),
+            ("language", "fr"),
+        ],
+    ] {
+        assert_eq!(
+            post(&app, classify_path, &editor, &fields).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    sqlx::raw_sql("CREATE FUNCTION news.fixture_fail_classification() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic citation failure'; END $$; CREATE TRIGGER fixture_fail_classification BEFORE INSERT ON news.citations FOR EACH ROW EXECUTE FUNCTION news.fixture_fail_classification();").execute(&owner).await.unwrap();
+    let failed = post(
+        &app,
+        classify_path,
+        &editor,
+        &[
+            ("version", "2"),
+            ("reason", "Rollback fixture"),
+            ("topic:science", "yes"),
+            ("geography:world", "yes"),
+        ],
+    )
+    .await;
+    assert_eq!(failed.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM news.story_revisions WHERE story_id='legacy-classify'"
+        )
+        .fetch_one(&owner)
+        .await
+        .unwrap(),
+        2
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT current_revision_id FROM news.stories WHERE id='legacy-classify'"
+        )
+        .fetch_one(&owner)
+        .await
+        .unwrap(),
+        revision
+    );
+    sqlx::raw_sql("DROP TRIGGER fixture_fail_classification ON news.citations; DROP FUNCTION news.fixture_fail_classification();").execute(&owner).await.unwrap();
     let mut broken = url::Url::parse(&reader_url).unwrap();
     broken.set_port(Some(9)).unwrap();
     let conf = Arc::new(config(broken.as_str(), Some(broken.as_str())));

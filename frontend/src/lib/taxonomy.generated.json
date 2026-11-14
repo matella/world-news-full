@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "topics": [
+    {"id":"politics","label":"Politique","aliases":["politique"]},
+    {"id":"economy","label":"Économie","aliases":["finance"]},
+    {"id":"technology","label":"Technologie","aliases":["tech"]},
+    {"id":"science","label":"Sciences","aliases":[]},
+    {"id":"health","label":"Santé","aliases":[]},
+    {"id":"environment","label":"Environnement","aliases":[]},
+    {"id":"society","label":"Société","aliases":[]},
+    {"id":"culture","label":"Culture","aliases":[]},
+    {"id":"sport","label":"Sport","aliases":[]}
+  ],
+  "geography": [
+    {"id":"be","label":"Belgique","aliases":[]},
+    {"id":"eu","label":"Europe","aliases":[]},
+    {"id":"world","label":"International","aliases":[]}
+  ],
+  "sections": [
+    {"id":"sport","label":"Sport","any_topics":["sport"],"any_geography":[]},
+    {"id":"science-tech-economy","label":"Sciences, tech & économie","any_topics":["science","technology","economy"],"any_geography":[]},
+    {"id":"belgium","label":"Belgique","any_topics":[],"any_geography":["be"]},
+    {"id":"europe","label":"Europe","any_topics":[],"any_geography":["eu"]},
+    {"id":"international","label":"International","any_topics":[],"any_geography":["world"]}
+  ],
+  "fallback": {"id":"unclassified","label":"Non classé"}
+}

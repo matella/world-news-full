@@ -80,6 +80,8 @@ def main():
             assert "Processing queue" not in admin_body and "Awaiting synthesis" not in admin_body
             run("exec", container, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c",
                 "INSERT INTO published_stories(id,title,body,lang,origin_count,source_count,edition_date) VALUES ('fixture-story','Synthetic headline','Synthetic body. Attribution historique : Jarvis.','fr',1,1,'2026-01-10')")
+            run("exec", container, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c",
+                "INSERT INTO published_stories(id,title,body,lang,topic,origin_count,source_count,edition_date) VALUES ('fixture-science','French world science fixture','Synthetic science body','fr','science',0,1,'2026-01-10')")
             for path in ["/", "/edition/2026-01-10", "/story/fixture-story"]:
                 code, html, _ = request(path)
                 assert code == 200 and "Synthetic headline" in html
@@ -105,6 +107,8 @@ def main():
                         for path in ["/", "/edition/2026-01-10", "/story/fixture-story"]:
                             page.goto(base + path, wait_until="networkidle")
                             page.get_by_role("heading", name="Synthetic headline", exact=True).wait_for()
+                            if path in ["/", "/edition/2026-01-10"]:
+                                assert page.locator(".section .sechead").all_text_contents() == ["Sciences, tech & économie"]
                             links = page.locator("a").evaluate_all("nodes => nodes.map(node => node.href)")
                             assert all("/?ask=" not in link and "192.168.129.85" not in link for link in links)
                             assert page.get_by_role("link", name="Analyse complète par Jarvis ↗", exact=True).count() == 0

@@ -84,6 +84,14 @@ def exercise(binary, reader_url, writer_url):
                 assert page.get_by_role("heading", name="Brouillon : Browser original draft", exact=True).is_visible()
                 assert page.get_by_text("Premier paragraphe original.", exact=True).is_visible()
                 draft_id = page.url.rsplit("/", 1)[1]
+                classification = page.locator('form[action$="/classification"]')
+                classification.get_by_label("Sujet : Politique", exact=True).check()
+                classification.get_by_label("Pertinence géographique : Belgique", exact=True).check()
+                classification.get_by_label("Motif du classement", exact=True).fill("Vérification géographique de la rédaction de test.")
+                with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/classification")) as submitted:
+                    classification.get_by_role("button").click()
+                assert submitted.value.status == 303
+                page.get_by_text("Rubrique proposée : Belgique. La langue du texte ne détermine pas sa géographie.", exact=True).wait_for()
                 response = context.request.get(origin + "/story/" + draft_id)
                 assert response.status == 404
                 assert "Browser original draft" not in response.text()
@@ -102,7 +110,7 @@ def exercise(binary, reader_url, writer_url):
             logs = log.read()
             for secret in [password, "synthetic-ops-reader", "synthetic-ops-writer", "Browser original draft"]:
                 assert secret.encode() not in logs
-            print("PASS: Chromium source/manual-link/original-draft forms, private publication boundary, mobile overflow, no external requests")
+            print("PASS: Chromium source/manual-link/original-draft/classification forms, private publication boundary, mobile overflow, no external requests")
         finally:
             if app.poll() is None:
                 app.kill()

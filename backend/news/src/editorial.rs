@@ -188,6 +188,43 @@ impl EditorialService {
             .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_revise",e))?;
         finish(tx, &head, &revision, &actor, "revised", &reason).await
     }
+    /// Classification-only edit: retain content, citations and original provenance.
+    /// Review is invalidated and the published revision remains unchanged.
+    pub async fn reclassify(
+        &self,
+        session: &Session,
+        id: &str,
+        expected: i64,
+        classification: crate::taxonomy::Classification,
+        reason: &str,
+        policy: &crate::taxonomy::Taxonomy,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        if !policy.validate(&classification) || !text(reason, 2000) {
+            return Err(AppError::Validation("Invalid classification or reason."));
+        }
+        let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
+        let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.public_state == PublicState::Withdrawn {
+            return Err(AppError::Conflict);
+        }
+        let old = load_revision(&mut tx, &head.current_revision_id).await?;
+        if old.topics == classification.topics && old.geography == classification.geography {
+            return Err(AppError::Validation("Classification is unchanged."));
+        }
+        let provenance = serde_json::json!({"basis":"editor_override","policy_hash":policy.fingerprint(),"policy_snapshot":policy,
+            "previous_revision":old.id,"section":policy.section(&classification).0});
+        let revision: String=sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT story_id,number+1,title,standfirst,summary,body,language,format,kind,$3,$4,$5,$6,provenance || jsonb_build_object('classification',$7::jsonb) FROM news.story_revisions WHERE story_id=$1 AND id=$2 RETURNING id")
+            .bind(id).bind(&old.id).bind(&classification.topics).bind(&classification.geography)
+            .bind(actor.id()).bind(reason).bind(Json(provenance)).fetch_one(&mut *tx).await
+            .map_err(|e|AppError::database("classification_revision",e))?;
+        sqlx::query("INSERT INTO news.citations(revision_id,claim_id,source_article_id,location) SELECT $1,claim_id,source_article_id,location FROM news.citations WHERE revision_id=$2")
+            .bind(&revision).bind(&old.id).execute(&mut *tx).await.map_err(|e|AppError::database("classification_citations",e))?;
+        sqlx::query("UPDATE news.stories SET current_revision_id=$2,review_state='draft',state=CASE WHEN published_revision_id IS NULL THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
+            .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("classification_head",e))?;
+        finish(tx, &head, &revision, &actor, "revised", reason).await
+    }
+
     pub async fn submit(
         &self,
         session: &Session,

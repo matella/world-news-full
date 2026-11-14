@@ -65,6 +65,13 @@ Follow docs/jarvis-handoff.md for inventory, exact release artifacts, authorizat
 final reconciliation and single-writer/rollback gates. Independent edition-publication
 acceptance remains blocked on its editorial/edition policies, not hyperlink removal.
 
+Language never determines geographic relevance. Use config/taxonomy.json and the
+shared Rust projection for classification/section consumers. Keep the transitional
+generated JSON byte-identical (check_foundation enforces drift). Legacy mappings
+are proposals; preserve raw payloads/frozen snapshots and explicit unknowns. Editor
+classification changes create a versioned candidate, retain prose/citations/original
+provenance and invalidate review; do not transfer old translation/review approval.
+
 ## Commands and evidence
 
 | Purpose | Command from repository root |
@@ -74,6 +81,7 @@ acceptance remains blocked on its editorial/edition policies, not hyperlink remo
 | Transitional frontend | `cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm run build` (explicit DATABASE_URL required) |
 | Current Rust skeleton | `cargo build --workspace --locked` |
 | New Rust foundation | `cargo run -p world-news -- --check-config`, `cargo run -p world-news` (DATABASE_URL required; default port 3001) |
+| Taxonomy / sections | `NEWS_TAXONOMY_CONFIG` optional bounded Rust policy; see docs/taxonomy.md; offline import reports proposed mappings only |
 | Protected pipeline UI | `/admin/pipeline` and source/feed/article/job forms; see docs/pipeline-admin.md; `WORLDNEWS_BROWSER_CHECK=1 python3 scripts/test_database.py` adds real Chromium workflow |
 | Bounded intake orchestration | `world-news --work-intake-once`; default no feed HTTP/extraction; typed allowlist/caps/budget in docs/intake-worker.md |
 | Explicit selected feed / recovery | `world-news --poll-feed-once ID` (can fetch) / `world-news --recover-feed-leases-once` (no HTTP); see docs/feed-recovery.md; no startup scheduler |

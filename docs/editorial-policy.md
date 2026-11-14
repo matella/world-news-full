@@ -49,7 +49,9 @@ exposing later notices. Restrict internal notes to editorial access.
 Translations identify language/method/review status and original revision. An
 original revision change makes translations stale until reviewed. Show untranslated
 fallback honestly. Geography and topic are independent of language. Do not derive
-Belgian relevance from French/Dutch alone.
+Belgian relevance from French/Dutch alone. See [taxonomy rules](taxonomy.md) and
+config/taxonomy.json for explicit multi-tag classification, precedence, unknowns
+and revisioned editor overrides.
 
 ## Acceptance examples
 

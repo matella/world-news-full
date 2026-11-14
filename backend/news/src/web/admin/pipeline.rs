@@ -20,8 +20,8 @@ use askama::Template;
 use axum::{
     Extension, Form, Router,
     extract::{
-        Path, Query, State,
-        rejection::{FormRejection, QueryRejection},
+        Path, Query, RawForm, State,
+        rejection::{FormRejection, QueryRejection, RawFormRejection},
     },
     http::{StatusCode, header},
     response::{Html, IntoResponse, Redirect, Response},
@@ -363,6 +363,7 @@ pub(super) fn routes() -> Router<AppState> {
         .route("/admin/batches", get(batches))
         .route("/admin/batches/{id}/enqueue", post(enqueue_batch))
         .route("/admin/drafts/{id}", get(view_draft))
+        .route("/admin/drafts/{id}/classification", post(classify_draft))
 }
 async fn css() -> impl IntoResponse {
     (
@@ -1045,6 +1046,21 @@ async fn view_draft(
             revision.format.as_str()
         ));
 
+        let projection = state.config.taxonomy.project(&revision.topics, &revision.geography);
+        let classification = crate::taxonomy::Classification { topics: projection.topics.clone(), geography: projection.geography.clone() };
+        v.paragraphs.push(format!("Rubrique proposée : {}. La langue du texte ne détermine pas sa géographie.", state.config.taxonomy.section(&classification).1));
+        if projection.unmapped_topics || projection.unmapped_geography {
+            v.paragraphs.push("Certaines anciennes étiquettes ne correspondent pas à la nomenclature. Les choix ci-dessous créeront une nouvelle version ; l’ancienne reste dans l’historique.".into());
+        }
+        let mut fields = vec![hidden("version", head.lock_version)];
+        for tag in &state.config.taxonomy.topics {
+            fields.push(checkbox(&format!("topic:{}",tag.id), &format!("Sujet : {}",tag.label), classification.topics.contains(&tag.id)));
+        }
+        for tag in &state.config.taxonomy.geography {
+            fields.push(checkbox(&format!("geography:{}",tag.id), &format!("Pertinence géographique : {}",tag.label), classification.geography.contains(&tag.id)));
+        }
+        fields.push(field("reason", "Motif du classement", "", "textarea", true));
+        v.forms.push(FormSpec {title:"Classer cette version".into(), action:action("drafts", &id, "classification"), button:"Enregistrer le classement dans une nouvelle version".into(), fields});
         v.paragraphs
             .extend(revision.body.into_iter().map(|b| match b {
                 ContentBlock::Paragraph { text } | ContentBlock::Heading { text, .. } => text,
@@ -1055,6 +1071,61 @@ async fn view_draft(
     .await;
 
     render(&state, result)
+}
+
+async fn classify_draft(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    Path(id): Path<String>,
+    input: Result<RawForm, RawFormRejection>,
+) -> Response {
+    let result = async {
+        let RawForm(bytes) =
+            input.map_err(|_| AppError::Validation("Invalid classification form."))?;
+        let mut fields = std::collections::BTreeMap::new();
+        for (key, value) in url::form_urlencoded::parse(&bytes) {
+            if fields
+                .insert(key.into_owned(), value.into_owned())
+                .is_some()
+            {
+                return Err(AppError::Validation("Duplicate classification field."));
+            }
+        }
+        fields.remove("csrf").ok_or(AppError::Forbidden)?;
+        let version = fields
+            .remove("version")
+            .and_then(|s| s.parse::<i64>().ok())
+            .ok_or(AppError::Validation("Missing classification version."))?;
+        let reason = fields
+            .remove("reason")
+            .ok_or(AppError::Validation("Missing classification reason."))?;
+        let mut classification = crate::taxonomy::Classification::default();
+        for (key, value) in fields {
+            if value != "yes" {
+                return Err(AppError::Validation("Invalid classification choice."));
+            }
+            if let Some(topic) = key.strip_prefix("topic:") {
+                classification.topics.push(topic.into());
+            } else if let Some(geography) = key.strip_prefix("geography:") {
+                classification.geography.push(geography.into());
+            } else {
+                return Err(AppError::Validation("Unknown classification field."));
+            }
+        }
+        EditorialService::new(pool(&state)?)
+            .reclassify(
+                &session,
+                &id,
+                version,
+                classification,
+                &reason,
+                &state.config.taxonomy,
+            )
+            .await?;
+        Ok(route("drafts", &id))
+    }
+    .await;
+    redirect(&state, result)
 }
 
 fn source_form(
