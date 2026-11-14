@@ -50,13 +50,17 @@ source implementation and disposable tests continue without production access.
   revalidation. All five DB suites and 23 unit tests passed, including concurrent
   edits, role-change locking and injected rollback. No publishing HTTP endpoint is
   exposed before the complete content/editor policy gates are implemented. GitHub CI passed.
-- Source registry branch, based on #58: #17 protected versioned source/feed/origin
+- PR #59, based on #58: #17 protected versioned source/feed/origin
   configuration, explicit rights/storage/display policy, immutable private audit,
   soft disable and captured historical attribution. All six DB suites passed;
-  no source is fetched or subscribed by registry operations.
+  no source is fetched or subscribed by registry operations. GitHub CI passed.
+- Safe feed branch, based on #59: #18 bounded RSS/Atom HTTP/parser services,
+  destination/DNS pinning, due/retry status and durable metadata batches committed
+  before cache advancement. 29 unit tests and seven DB suites passed. No startup
+  polling loop, arbitrary production subscription or publication side effect.
 
 #13 preceded #12 because both depend on #11 and the importer reuses typed content
 and error boundaries. This changes implementation order, not the dependency graph.
-Next: bounded safe HTTP/feed intake, extraction/jobs and article/editor/edition
-policy. Route/import/service success does not complete
+Next: #19 conservative article normalisation/deduplication from durable metadata,
+then rights-aware extraction/jobs and article/editor/edition policy. Service success does not complete
 those issues or authorise a live release.

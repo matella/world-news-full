@@ -24,6 +24,13 @@ cookie = "0.18.2"
 getrandom = "0.4"
 subtle = "2"
 zeroize = "1"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+feed-rs = "3"
+quick-xml = { version = "0.42", features = ["encoding"] }
+ipnet = "2"
+httpdate = "1"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+futures-util = "0.3"

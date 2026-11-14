@@ -25,6 +25,33 @@ pub fn safe_source_url(value: &str) -> bool {
     })
 }
 
+/// Public unauthenticated URL fields reject known credential parameter names.
+/// This cannot prove arbitrary paths/query values contain no secret.
+pub(crate) fn public_url_parameters(url: &url::Url) -> bool {
+    !url.query_pairs().any(|(key, _)| {
+        let key = key.to_ascii_lowercase().replace('-', "_");
+        key == "key"
+            || key == "auth"
+            || key == "sid"
+            || key == "session"
+            || key.ends_with("_key")
+            || key == "sig"
+            || [
+                "token",
+                "secret",
+                "password",
+                "authorization",
+                "credential",
+                "cookie",
+                "signature",
+                "api_key",
+                "apikey",
+            ]
+            .iter()
+            .any(|part| key.contains(part))
+    })
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ContentBlock {
