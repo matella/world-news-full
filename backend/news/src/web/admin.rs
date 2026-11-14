@@ -1,3 +1,4 @@
+mod editor;
 mod pipeline;
 use super::*;
 use crate::auth::{AuthError, Login, Permission, Role, Session};
@@ -32,6 +33,7 @@ pub(super) fn routes(state: AppState) -> Router<AppState> {
         .route("/admin/logout", post(logout))
         .route("/admin/publishing", get(publishing))
         .merge(pipeline::routes())
+        .merge(editor::routes())
         .route("/admin/{*rest}", get(super::not_found))
         .route_layer(middleware::from_fn_with_state(state, guard))
 }
@@ -70,7 +72,8 @@ async fn guard(State(state): State<AppState>, mut request: Request, next: Next) 
     }
     if unsafe_method {
         let (parts, body) = request.into_parts();
-        let bytes = match to_bytes(body, MAX_BODY).await {
+        let limit = body_limit(parts.uri.path());
+        let bytes = match to_bytes(body, limit).await {
             Ok(bytes) => bytes,
             Err(_) => return failure(&state, AuthError::InvalidInput),
         };

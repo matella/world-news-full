@@ -177,3 +177,12 @@ sourcing/length approval data; genuine historical corrections cannot manufacture
 new import or relabel archive identity. See ADR 0020 and docs/editor-workbench.md.
 This does not complete the editor UI, publisher origin/thread controls or complete
 review/publication/correction/withdrawal journey. No public write route is added.
+
+## Private structured authoring
+
+PR #77 is merged. The next #29 slice adds the authenticated draft board, plain
+structured editing, nonpersistent reader preview and private revision saves with
+explicit deletion and stale-edit recovery. See ADR 0021, docs/editor-authoring.md
+and its evidence: 55 unit tests, 19 database suites and five Chromium flows passed
+locally. Full source selection, publisher origin/thread controls and the complete
+review/publication/correction/withdrawal journey remain; #29 stays open.

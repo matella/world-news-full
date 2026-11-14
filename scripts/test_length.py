@@ -80,13 +80,50 @@ def exercise(binary, reader_url, writer_url):
                 assert "Temps de lecture non estimé" in page.locator("article").inner_text()
                 assert "environ 1 min" not in page.locator("article").inner_text()
                 assert page.goto(origin + "/story/punctuation").status == 404
+                # The same restricted editor can author plain blocks without a client script.
+                assert page.goto(origin + "/admin/editor").status == 200
+                page.get_by_role("link",name="Écrire un article",exact=True).click()
+                form = page.locator('form[action="/admin/editor"]')
+                form.get_by_label("Titre",exact=True).fill("Nouvelle note <script>littérale</script>")
+                form.locator('[name="kind_0"]').select_option("paragraph")
+                prose = "Premier paragraphe <script>reste du texte</script>."
+                form.locator('[name="text_0"]').fill(prose)
+                form.get_by_role("button",name="Ajouter un bloc sans enregistrer").click()
+                form = page.locator('form[action="/admin/editor"]')
+                assert form.locator('[name="text_0"]').input_value() == prose
+                form.locator('[name="kind_1"]').select_option("claim")
+                form.locator('[name="text_1"]').fill("Une affirmation à étayer.")
+                form.get_by_role("button",name="Prévisualiser sans enregistrer").click()
+                assert page.get_by_role("heading",name="Prévisualisation non enregistrée").is_visible()
+                assert page.locator("article script,article img").count() == 0
+                assert prose in page.locator("article").inner_text()
+                form = page.locator('form[action="/admin/editor"]')
+                anchor = form.locator('[name="claim_1"]').input_value()
+                assert anchor.startswith("c-")
+                form.get_by_role("button",name="Enregistrer une version privée").click()
+                assert "/admin/editor/story/" in page.url
+                form = page.locator('form[action^="/admin/editor/story/"]')
+                assert form.locator('[name="claim_1"]').input_value() == anchor
+                form.locator('[name="title"]').fill("Un titre corrigé")
+                form.locator('[name="reason"]').fill("Corriger le titre sans changer la rédaction")
+                button = form.get_by_role("button",name="Enregistrer une version privée")
+                button.focus()
+                button.press("Enter")
+                page.wait_for_load_state("domcontentloaded")
+                form = page.locator('form[action^="/admin/editor/story/"]')
+                assert form.locator('[name="text_0"]').input_value() == prose
+                assert form.locator('[name="claim_1"]').input_value() == anchor
+                assert page.locator("script,img").count() == 0
+                page.set_viewport_size({"width":390,"height":844})
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                page.screenshot(path="/workspace/work/authoring-preview.png",full_page=True)
                 assert not external, external
                 browser.close()
             app.terminate()
             assert app.wait(timeout=10) == 0
             log.seek(0)
             assert b"synthetic-length-reader" not in log.read()
-            print("PASS: Chromium private count/range/warnings, keyboard reasoned override without prose changes, mobile layout, anonymous reading estimates and unsupported-language honesty; no external requests")
+            print("PASS: Chromium private count/range/warnings, keyboard overrides, plain authoring/add/preview/save/title edit, stable claims, mobile layout and honest anonymous estimates; no external requests")
         finally:
             if app.poll() is None:
                 app.kill()

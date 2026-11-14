@@ -109,7 +109,7 @@ impl RevisionInput {
     fn validate(&self) -> Result<(), AppError> {
         self.validate_content(false)
     }
-    fn validate_content(&self, historical: bool) -> Result<(), AppError> {
+    pub(crate) fn validate_content(&self, historical: bool) -> Result<(), AppError> {
         let metadata =
             |values: &[String]| values.len() <= 20 && values.iter().all(|v| text(v, 100));
         if !text(&self.title, 500)
@@ -726,3 +726,5 @@ async fn finish(
 
 mod workbench;
 pub use workbench::{DraftCard, DraftCursor, DraftFilter, DraftPage, EvidenceDraft};
+
+pub mod authoring;
