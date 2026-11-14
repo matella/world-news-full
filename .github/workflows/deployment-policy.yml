@@ -1,0 +1,20 @@
+name: Deployment policy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 scripts/check_deployment_policy.py
+      - run: python3 scripts/test_deployment_policy.py
