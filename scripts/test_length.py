@@ -117,13 +117,53 @@ def exercise(binary, reader_url, writer_url):
                 page.set_viewport_size({"width":390,"height":844})
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 page.screenshot(path="/workspace/work/authoring-preview.png",full_page=True)
+                # Explicit source selection keeps original-method notes private.
+                page.get_by_role("link",name="Attribuer les sources et les affirmations").click()
+                evidence = page.locator('form[action$="/sources"]')
+                evidence.locator('[name="mode"]').select_option("external")
+                evidence.get_by_label("Attribution publique",exact=True).fill("Source documentaire synthétique")
+                evidence.get_by_label("Limites et incertitudes publiques").fill("Une seule source, origine non vérifiée")
+                evidence.get_by_role("button",name="Ajouter une référence sans enregistrer").click()
+                evidence = page.locator('form[action$="/sources"]')
+                assert evidence.count() == 1, page.locator("main").inner_text()
+                assert evidence.get_by_label("Attribution publique",exact=True).input_value() == "Source documentaire synthétique"
+                # The fixture has >50 catalog records: reach the actual next page.
+                evidence.get_by_role("button",name="Page suivante du catalogue").click()
+                evidence = page.locator('form[action$="/sources"]')
+                assert evidence.get_by_label("Attribution publique",exact=True).input_value() == "Source documentaire synthétique"
+                evidence.locator('[name="source_0"]').select_option("reference")
+                evidence.locator('[name="claim_0"]').select_option(anchor)
+                evidence.get_by_label("Emplacement précis dans le document").fill("Page de démonstration")
+                evidence.get_by_role("button",name="Afficher le début du catalogue").click()
+                evidence = page.locator('form[action$="/sources"]')
+                assert evidence.locator('[name="source_0"]').input_value() == "reference"
+                assert evidence.locator('[name="claim_0"]').input_value() == anchor
+                evidence.get_by_role("button",name="Ajouter une méthode sans enregistrer").click()
+                evidence = page.locator('form[action$="/sources"]')
+                evidence.get_by_label("Attribution publique de la méthode").fill("Observation synthétique déclarée")
+                evidence.get_by_label("Justificatif privé").fill("PRIVATE-BROWSER-SOURCE </textarea><script>texte inerte</script>")
+                evidence.locator('[name="new_claim_0"]').select_option(anchor)
+                evidence.get_by_role("button",name="Conserver cette affirmation sans enregistrer").click()
+                evidence = page.locator('form[action$="/sources"]')
+                assert evidence.locator('[name="scope_0_0"]').is_checked()
+                evidence.get_by_label("Motif privé de la nouvelle révision").fill("Attribuer explicitement les sources du brouillon")
+                button = evidence.get_by_role("button",name="Enregistrer les sources dans une version privée")
+                button.focus()
+                button.press("Enter")
+                page.wait_for_load_state("domcontentloaded")
+                evidence = page.locator('form[action$="/sources"]')
+                assert evidence.locator('[name="origin_0"]').input_value() == "0"
+                assert evidence.get_by_label("Justificatif privé").input_value().startswith("PRIVATE-BROWSER-SOURCE")
+                assert page.locator("script,img").count() == 0
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                page.screenshot(path="/workspace/work/source-editor-preview.png",full_page=True)
                 assert not external, external
                 browser.close()
             app.terminate()
             assert app.wait(timeout=10) == 0
             log.seek(0)
             assert b"synthetic-length-reader" not in log.read()
-            print("PASS: Chromium private count/range/warnings, keyboard overrides, plain authoring/add/preview/save/title edit, stable claims, mobile layout and honest anonymous estimates; no external requests")
+            print("PASS: Chromium private count/range/warnings, keyboard overrides, plain authoring/add/preview/save/title edit, stable claims, explicit sources/private methods, mobile layout and honest anonymous estimates; no external requests")
         finally:
             if app.poll() is None:
                 app.kill()

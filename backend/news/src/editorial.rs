@@ -725,6 +725,8 @@ async fn finish(
 }
 
 mod workbench;
-pub use workbench::{DraftCard, DraftCursor, DraftFilter, DraftPage, EvidenceDraft};
+pub use workbench::{
+    DraftCard, DraftCursor, DraftFilter, DraftPage, EvidenceDraft, SourceChoice, SourceChoices,
+};
 
 pub mod authoring;

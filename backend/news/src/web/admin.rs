@@ -1,4 +1,5 @@
 mod editor;
+mod evidence;
 mod pipeline;
 use super::*;
 use crate::auth::{AuthError, Login, Permission, Role, Session};
@@ -34,6 +35,7 @@ pub(super) fn routes(state: AppState) -> Router<AppState> {
         .route("/admin/publishing", get(publishing))
         .merge(pipeline::routes())
         .merge(editor::routes())
+        .merge(evidence::routes())
         .route("/admin/{*rest}", get(super::not_found))
         .route_layer(middleware::from_fn_with_state(state, guard))
 }

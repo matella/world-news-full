@@ -786,6 +786,217 @@ async fn length_overrides_preserve_prose_evidence_and_exact_review_authority() {
             .status(),
         StatusCode::OK
     );
+    // The source editor writes an immutable private candidate, not prose or publication.
+    let mut input = draft(80, "fr", None);
+    input.body = vec![
+        ContentBlock::Claim {
+            id: "first".into(),
+            text: "mot ".repeat(80),
+        },
+        ContentBlock::Claim {
+            id: "second".into(),
+            text: "Second attributed statement".into(),
+        },
+    ];
+    input.body.extend((0..60).map(|i| ContentBlock::Claim {
+        id: format!("extra-{i:02}"),
+        text: "Synthetic".into(),
+    }));
+    input.evidence = None;
+    let source_head = service
+        .create(&editor, "source-controls", input)
+        .await
+        .unwrap();
+    let source_path = "/admin/editor/story/source-controls/sources";
+    assert_eq!(
+        request(&app, "GET", source_path, None, false, &[])
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let html = text(request(&app, "GET", source_path, Some(&cookie), false, &[]).await).await;
+    let mut source_form = author_fields(&html);
+    source_form.insert("mode".into(), "external".into());
+    source_form.insert(
+        "attribution".into(),
+        "Public <script>source attribution</script>".into(),
+    );
+    source_form.insert(
+        "limits".into(),
+        "One document, uncertain origin; no independence claim".into(),
+    );
+    for intent in [
+        "add_reference",
+        "add_reference",
+        "add_method",
+        "add_dispute",
+    ] {
+        source_form.insert("intent".into(), intent.into());
+        let response = author_post(&app, source_path, &cookie, &source_form).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        source_form = author_fields(&text(response).await);
+    }
+    assert_eq!(
+        service
+            .head(&editor, "source-controls")
+            .await
+            .unwrap()
+            .lock_version,
+        source_head.lock_version
+    );
+    source_form.insert("source_0".into(), "reference".into());
+    source_form.insert("source_1".into(), "reference".into());
+    source_form.insert("claim_0".into(), "first".into());
+    source_form.insert("claim_1".into(), "second".into());
+    source_form.insert(
+        "method_attribution_0".into(),
+        "Public original observation".into(),
+    );
+    source_form.insert(
+        "private_0".into(),
+        "PRIVATE-SOURCE-CONTROLS </textarea><script>inert proof</script>".into(),
+    );
+    source_form.insert("new_claim_0".into(), "first".into());
+    source_form.insert("subject_0".into(), "Attributed disagreement".into());
+    source_form.insert("position_claim_0_0".into(), "first".into());
+    source_form.insert(
+        "position_attribution_0_0".into(),
+        "Named first position".into(),
+    );
+    source_form.insert("position_claim_0_1".into(), "second".into());
+    source_form.insert(
+        "position_attribution_0_1".into(),
+        "Named second position".into(),
+    );
+    source_form.insert("reason".into(), "Explicit human source attribution".into());
+    source_form.insert("intent".into(), "save".into());
+    source_form.insert("intent".into(), "claims:50".into());
+    let paged = author_post(&app, source_path, &cookie, &source_form).await;
+    assert_eq!(paged.status(), StatusCode::OK);
+    let html = text(paged).await;
+    assert!(html.contains("extra-59"));
+    source_form = author_fields(&html);
+    assert_eq!(source_form["claim_0"], "first");
+    assert_eq!(source_form["new_claim_0"], "first");
+    source_form.insert("intent".into(), "save".into());
+    let mut bad = source_form.clone();
+    bad.insert("claim_0".into(), "missing".into());
+    let response = author_post(&app, source_path, &cookie, &bad).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let recovery = text(response).await;
+    assert!(recovery.contains("PRIVATE-SOURCE-CONTROLS"));
+    assert!(!recovery.contains("<script>inert proof</script>"));
+    assert_eq!(
+        service
+            .head(&editor, "source-controls")
+            .await
+            .unwrap()
+            .lock_version,
+        source_head.lock_version
+    );
+    let mut no_csrf = source_form.clone();
+    no_csrf.remove("csrf");
+    assert_eq!(
+        author_post(&app, source_path, &cookie, &no_csrf)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let response = author_post(&app, source_path, &cookie, &source_form).await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    let sourced = service
+        .evidence_draft(&editor, "source-controls")
+        .await
+        .unwrap();
+    assert!(!sourced.proposed);
+    assert_eq!(sourced.head.lock_version, source_head.lock_version + 1);
+    assert_eq!(sourced.package.bindings.len(), 2);
+    assert!(
+        sourced
+            .package
+            .bindings
+            .iter()
+            .all(|b| b.origin_version == Some(0))
+    );
+    assert_eq!(sourced.package.disagreements[0].positions.len(), 2);
+    assert!(
+        sourced.package.firsthand[0]
+            .private_note
+            .starts_with("PRIVATE-SOURCE-CONTROLS")
+    );
+    assert!(
+        sourced.revision.body[0]
+            .texts()
+            .next()
+            .unwrap()
+            .starts_with("mot ")
+    );
+    assert_eq!(sourced.head.published_revision_id, None);
+    assert_eq!(
+        author_post(&app, source_path, &cookie, &source_form)
+            .await
+            .status(),
+        StatusCode::CONFLICT
+    );
+    let html = text(request(&app, "GET", source_path, Some(&cookie), false, &[]).await).await;
+    let mut latest = author_fields(&html);
+    assert_eq!(latest["origin_0"], "0");
+    latest.insert("intent".into(), "publish".into());
+    assert_eq!(
+        author_post(&app, source_path, &cookie, &latest)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    latest.insert("intent".into(), "save".into());
+    latest.insert("actor_id".into(), "length-publisher".into());
+    assert_eq!(
+        author_post(&app, source_path, &cookie, &latest)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(&app, "GET", "/story/source-controls", None, false, &[])
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    for i in 0..52 {
+        let id = format!("catalog-{i:02}");
+        sqlx::query("INSERT INTO news.source_articles(id,source_id,canonical_key,original_url,title,extraction_state) VALUES($1,'reference',$1,'https://reference.invalid/catalog','Synthetic catalog','metadata_only')").bind(id).execute(&owner).await.unwrap();
+    }
+    let selected = vec!["reference".into()];
+    let choices = service
+        .source_choices(&editor, &selected, None, None)
+        .await
+        .unwrap();
+    assert_eq!(choices.items.len(), 51); // 50 choices plus the retained selection outside this page.
+    assert!(choices.items.iter().any(|s| s.id == "reference"));
+    let next = service
+        .source_choices(&editor, &selected, choices.next.as_deref(), None)
+        .await
+        .unwrap();
+    assert!(next.items.iter().any(|s| s.id == "catalog-51"));
+    assert!(next.next.is_none());
+    let html = text(request(&app, "GET", source_path, Some(&cookie), false, &[]).await).await;
+    let mut changed = author_fields(&html);
+    changed.insert("source_0".into(), "catalog-51".into());
+    changed.insert("reason".into(), "Change one documentary reference".into());
+    changed.insert("intent".into(), "save".into());
+    assert_eq!(
+        author_post(&app, source_path, &cookie, &changed)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    changed.insert("refresh_0".into(), "yes".into());
+    assert_eq!(
+        author_post(&app, source_path, &cookie, &changed)
+            .await
+            .status(),
+        StatusCode::SEE_OTHER
+    );
     service
         .create(&editor, "browser-length", draft(79, "fr", None))
         .await

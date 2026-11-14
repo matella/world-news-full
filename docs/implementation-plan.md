@@ -186,3 +186,13 @@ explicit deletion and stale-edit recovery. See ADR 0021, docs/editor-authoring.m
 and its evidence: 55 unit tests, 19 database suites and five Chromium flows passed
 locally. Full source selection, publisher origin/thread controls and the complete
 review/publication/correction/withdrawal journey remain; #29 stays open.
+
+## Source-package authoring
+
+PR #78 is merged at 251af25631118ea36888515dc86053fa39683789 after all three CI
+workflows passed. The next #29 slice adds explicit document/claim selection,
+public attribution/limits, private original-method justifications and attributed
+disagreements. It uses immutable source-only revisions, pinned proof versions,
+explicit capture after document changes, bounded choices and stale-input recovery.
+See ADR 0022 and docs/editor-sources.md. Publisher origin/thread controls and the
+full workflow remain open; no HTTP publication or live release is introduced.

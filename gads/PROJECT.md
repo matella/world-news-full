@@ -190,3 +190,13 @@ historical lineage; require explicit deletion. Text changes do not inherit sourc
 packages or length exceptions. Scope the larger body bound to editor paths, reject
 malformed form encoding and reauthorise conflict recovery. No HTTP publication is
 authorised by this authoring slice; complete #29 source/curation/workflow gates first.
+
+## Private source selection
+
+Follow docs/editor-sources.md and ADR 0022. Parent proposals remain unattached until
+explicit source-only revision save. Preserve actual frozen proof versions; changing
+a document requires explicit current capture. Never manufacture human methods or
+infer proof from metadata. Separate public attribution/limits from private notes.
+Bound document/claim choices while retaining current selections, reject stale saves
+and preserve submitted recovery input. Source forms add no HTTP publication gate
+bypass; publisher origin/thread controls and full #29 acceptance remain required.

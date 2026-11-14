@@ -59,6 +59,7 @@ struct View {
     kinds: Vec<Choice>,
     block_kinds: &'static [BlockKind],
     details: Option<String>,
+    sources: Option<String>,
     article: Option<Revision>,
     evidence: Option<crate::citations::Report>,
     length: Option<crate::length::Report>,
@@ -88,6 +89,7 @@ fn view(state: &AppState, session: &Session, title: &str) -> View {
         kinds: vec![],
         block_kinds: BlockKind::all(),
         details: None,
+        sources: None,
         article: None,
         evidence: None,
         length: None,
@@ -263,6 +265,10 @@ fn with_form(mut v: View, f: Fields) -> View {
         .story
         .as_deref()
         .map(|id| format!("/admin{}", path_segment("drafts", id)));
+    v.sources = f
+        .story
+        .as_deref()
+        .map(|id| format!("{}/sources", route(id)));
     v.form = Some(f);
     v
 }
@@ -331,7 +337,7 @@ fn take(fields: &mut BTreeMap<String, String>, key: &str) -> Result<String, AppE
 }
 // Validate decoded UTF-8 before the URL-form library's intentionally lossy decoding.
 // This preserves an intentionally entered U+FFFD while rejecting malformed byte sequences.
-fn strict_encoding(bytes: &[u8]) -> bool {
+pub(super) fn strict_encoding(bytes: &[u8]) -> bool {
     let hex = |b: u8| match b {
         b'0'..=b'9' => Some(b - b'0'),
         b'a'..=b'f' => Some(b - b'a' + 10),
