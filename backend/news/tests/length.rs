@@ -154,6 +154,53 @@ async fn text(response: axum::response::Response) -> String {
     )
     .unwrap()
 }
+fn author_fields(html: &str) -> std::collections::BTreeMap<String, String> {
+    let doc = html_scraper::Html::parse_document(html);
+    let selector = html_scraper::Selector::parse("form[action^='/admin/editor']").unwrap();
+    let form = doc.select(&selector).next().unwrap();
+    let controls =
+        html_scraper::Selector::parse("input[name],textarea[name],select[name]").unwrap();
+    let mut result = std::collections::BTreeMap::new();
+    for control in form.select(&controls) {
+        let name = control.value().attr("name").unwrap();
+        let tag = control.value().name();
+        if control.value().attr("type") == Some("checkbox")
+            && control.value().attr("checked").is_none()
+        {
+            continue;
+        }
+        let value = match tag {
+            "textarea" => control.text().collect(),
+            "select" => {
+                let options = html_scraper::Selector::parse("option").unwrap();
+                let options: Vec<_> = control.select(&options).collect();
+                options
+                    .iter()
+                    .find(|o| o.value().attr("selected").is_some())
+                    .unwrap_or(&options[0])
+                    .value()
+                    .attr("value")
+                    .unwrap()
+                    .to_owned()
+            }
+            _ => control.value().attr("value").unwrap_or("").to_owned(),
+        };
+        result.insert(name.to_owned(), value);
+    }
+    result
+}
+async fn author_post(
+    app: &Router,
+    path: &str,
+    cookie: &str,
+    fields: &std::collections::BTreeMap<String, String>,
+) -> axum::response::Response {
+    let pairs: Vec<_> = fields
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    request(app, "POST", path, Some(cookie), true, &pairs).await
+}
 #[tokio::test]
 #[ignore = "requires its own disposable database; use scripts/test_database.py"]
 async fn length_overrides_preserve_prose_evidence_and_exact_review_authority() {
@@ -529,6 +576,216 @@ async fn length_overrides_preserve_prose_evidence_and_exact_review_authority() {
         before.lock_version
     );
     sqlx::raw_sql("DROP TRIGGER fixture_fail_length ON news.stories; DROP FUNCTION news.fixture_fail_length();").execute(&owner).await.unwrap();
+    // Exercise real protected authoring against the restricted writer, not the owner pool.
+    sqlx::query("GRANT INSERT ON news.stories TO fixture_length_writer")
+        .execute(&owner)
+        .await
+        .unwrap();
+    let html =
+        text(request(&app, "GET", "/admin/editor/new", Some(&cookie), false, &[]).await).await;
+    assert_eq!(
+        request(&app, "GET", "/admin/editor/new", None, false, &[])
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let mut form = author_fields(&html);
+    form.insert(
+        "title".into(),
+        "Private <script>authored title</script>".into(),
+    );
+    form.insert("kind_0".into(), "paragraph".into());
+    let original = "\nOriginal e\u{301}cole\r\n</textarea><script>plain author text</script>";
+    form.insert("text_0".into(), original.into());
+    form.insert("intent".into(), "preview".into());
+    let mut no_csrf = form.clone();
+    no_csrf.remove("csrf");
+    assert_eq!(
+        author_post(&app, "/admin/editor", &cookie, &no_csrf)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+
+    let rows_before: i64 = sqlx::query_scalar("SELECT count(*) FROM news.stories")
+        .fetch_one(&owner)
+        .await
+        .unwrap();
+    let preview = author_post(&app, "/admin/editor", &cookie, &form).await;
+    assert_eq!(preview.status(), StatusCode::OK);
+    let html = text(preview).await;
+    assert!(html.contains("Prévisualisation non enregistrée"));
+    assert!(!html.contains("<script>plain author"));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM news.stories")
+            .fetch_one(&owner)
+            .await
+            .unwrap(),
+        rows_before
+    );
+    form = author_fields(&html);
+    form.insert("intent".into(), "save".into());
+    // Seed external CRLF bytes; a later ordinary browser edit must retain them.
+    form.insert("text_0".into(), original.into());
+    let saved = author_post(&app, "/admin/editor", &cookie, &form).await;
+    assert_eq!(saved.status(), StatusCode::SEE_OTHER);
+    let edit_path = saved
+        .headers()
+        .get(header::LOCATION)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(edit_path.starts_with("/admin/editor/story/"));
+    let id = edit_path.rsplit('/').next().unwrap();
+    let saved_head = service.head(&editor, id).await.unwrap();
+    let saved_revision = service
+        .revision(&editor, &saved_head.current_revision_id)
+        .await
+        .unwrap();
+    assert_eq!(saved_revision.body[0].texts().next().unwrap(), original);
+    assert_eq!(
+        request(&app, "GET", &format!("/story/{id}"), None, false, &[])
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    let html = text(request(&app, "GET", &edit_path, Some(&cookie), false, &[]).await).await;
+    let mut form = author_fields(&html);
+    assert!(form["text_0"].starts_with('\n'));
+    form.insert("intent".into(), "save".into());
+    form.insert("title".into(), "Title-only correction".into());
+    form.insert("reason".into(), "Change only the title".into());
+    assert_eq!(
+        author_post(&app, &edit_path, &cookie, &form).await.status(),
+        StatusCode::SEE_OTHER
+    );
+    let edited = service.head(&editor, id).await.unwrap();
+    assert_eq!(
+        service
+            .revision(&editor, &edited.current_revision_id)
+            .await
+            .unwrap()
+            .body,
+        saved_revision.body
+    );
+    let html = text(request(&app, "GET", &edit_path, Some(&cookie), false, &[]).await).await;
+    let mut stale = author_fields(&html);
+    service
+        .revise(&editor, id, edited.lock_version, draft(79, "fr", None))
+        .await
+        .unwrap();
+    stale.insert("intent".into(), "save".into());
+    stale.insert(
+        "text_0".into(),
+        "Recovery marker <script>still plain</script>".into(),
+    );
+    stale.insert("reason".into(), "Retain my concurrent draft".into());
+    let conflict = author_post(&app, &edit_path, &cookie, &stale).await;
+    assert_eq!(conflict.status(), StatusCode::CONFLICT);
+    let html = text(conflict).await;
+    assert!(html.contains("Recovery marker"));
+    assert!(html.contains("Saisie à récupérer"));
+    assert!(!html.contains("<script>still plain"));
+    let current = service.head(&editor, id).await.unwrap();
+    let html = text(request(&app, "GET", &edit_path, Some(&cookie), false, &[]).await).await;
+    let mut large = author_fields(&html);
+    large.insert("text_0".into(), "mot ".repeat(18000));
+    large.insert("intent".into(), "preview".into());
+    assert_eq!(
+        author_post(&app, &edit_path, &cookie, &large)
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        author_post(&app, "/outside-editor", &cookie, &large)
+            .await
+            .status(),
+        StatusCode::PAYLOAD_TOO_LARGE
+    );
+    assert_eq!(
+        service.head(&editor, id).await.unwrap().lock_version,
+        current.lock_version
+    );
+    let mut malformed = large.clone();
+    malformed.insert("intent".into(), "save".into());
+    malformed.insert(
+        "reason".into(),
+        "Reject invalid encoding without changing text".into(),
+    );
+    malformed.insert("text_0".into(), "%FF".into());
+    let encoded = url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(malformed.iter())
+        .finish()
+        .replace("text_0=%25FF", "text_0=%FF");
+    let invalid = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(&edit_path)
+                .header(header::COOKIE, &cookie)
+                .header(header::ORIGIN, "https://news.invalid")
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(Body::from(encoded))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        service.head(&editor, id).await.unwrap().lock_version,
+        current.lock_version
+    );
+    malformed.insert("intent".into(), "preview".into());
+    malformed.insert("text_0".into(), "A literal replacement character: �".into());
+    assert_eq!(
+        author_post(&app, &edit_path, &cookie, &malformed)
+            .await
+            .status(),
+        StatusCode::OK
+    );
+
+    large.insert("intent".into(), "publish".into());
+    large.insert("text_0".into(), "No publication shortcut".into());
+    assert_eq!(
+        author_post(&app, &edit_path, &cookie, &large)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    large.insert("intent".into(), "save".into());
+    large.insert("actor_id".into(), "length-publisher".into());
+    assert_eq!(
+        author_post(&app, &edit_path, &cookie, &large)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    service
+        .create(&editor, "new", draft(80, "fr", None))
+        .await
+        .unwrap();
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            "/admin/editor/story/new",
+            Some(&cookie),
+            false,
+            &[]
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&app, "GET", "/admin/editor", Some(&cookie), false, &[])
+            .await
+            .status(),
+        StatusCode::OK
+    );
     service
         .create(&editor, "browser-length", draft(79, "fr", None))
         .await

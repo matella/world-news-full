@@ -31,6 +31,14 @@ use std::{
 };
 
 const MAX_BODY: usize = 64 * 1024;
+const MAX_EDITOR_BODY: usize = 4 * 1024 * 1024;
+fn body_limit(path: &str) -> usize {
+    if path == "/admin/editor" || path.starts_with("/admin/editor/") {
+        MAX_EDITOR_BODY
+    } else {
+        MAX_BODY
+    }
+}
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -520,13 +528,14 @@ async fn request_boundary(State(state): State<AppState>, request: Request, next:
             Ok(query) => query,
             Err(e) => return render(&state.config, Err(e)),
         };
+        let limit = body_limit(request.uri().path());
         let (mut parts, body) = request.into_parts();
         if parts
             .headers
             .get(header::CONTENT_LENGTH)
             .and_then(|h| h.to_str().ok())
             .and_then(|v| v.parse::<u64>().ok())
-            .is_some_and(|n| n > MAX_BODY as u64)
+            .is_some_and(|n| n > limit as u64)
         {
             return message(
                 &state.config,
@@ -537,7 +546,7 @@ async fn request_boundary(State(state): State<AppState>, request: Request, next:
         }
         // Real streamed-body cap, including unknown routes; DefaultBodyLimit alone
         // would only apply when a handler actually consumes a body extractor.
-        let body = match to_bytes(body, MAX_BODY).await {
+        let body = match to_bytes(body, limit).await {
             Ok(bytes) => Body::from(bytes),
             Err(error) => {
                 use std::error::Error;

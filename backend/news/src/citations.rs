@@ -51,6 +51,9 @@ pub struct Report {
     pub warnings: Vec<String>,
 }
 impl Report {
+    pub(crate) fn uncited(revision: &Revision) -> Result<Self, AppError> {
+        Self::build(revision, Vec::new(), PublicPackage::default())
+    }
     pub fn for_claim<'a>(&'a self, id: &'a str) -> impl Iterator<Item = &'a Citation> + 'a {
         self.citations
             .iter()

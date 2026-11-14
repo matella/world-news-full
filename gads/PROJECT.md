@@ -181,3 +181,12 @@ Jarvis writer, switch traffic, deploy, publish packages/images, modify live secr
 copy production records, incur provider costs or delete production data without
 explicit action/environment-specific authorisation. Prepare and verify locally
 first; approvals must concern concrete changes, not speculative future work.
+
+## Private article authoring
+
+Use docs/editor-authoring.md and ADR 0021. Preview/add are nonpersistent; save is a
+private versioned candidate. Preserve submitted text, stable claim IDs and genuine
+historical lineage; require explicit deletion. Text changes do not inherit source
+packages or length exceptions. Scope the larger body bound to editor paths, reject
+malformed form encoding and reauthorise conflict recovery. No HTTP publication is
+authorised by this authoring slice; complete #29 source/curation/workflow gates first.

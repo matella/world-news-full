@@ -3,6 +3,6 @@
 <body><header><a href="/">{{ masthead }}</a></header><main><h1>Administration</h1>
 <p>Connecté sous {{ username }}.</p>
 {% if publisher %}<p>Rôle : responsable de publication.</p><a href="/admin/publishing">Espace de publication</a>{% else %}<p>Rôle : éditeur.</p>{% endif %}
-<nav aria-label="Administration"><a href="/admin/pipeline">Suivi des sources et traitements</a> · <a href="/admin/sources">Sources</a> · <a href="/admin/articles">Documents et notes</a></nav><p>Les documents sources et brouillons restent privés. Aucun traitement ne publie automatiquement.</p>
+<nav aria-label="Administration"><a href="/admin/editor">Rédaction et brouillons</a> · <a href="/admin/pipeline">Suivi des sources et traitements</a> · <a href="/admin/sources">Sources</a> · <a href="/admin/articles">Documents et notes</a></nav><p>Les documents sources et brouillons restent privés. Aucun traitement ne publie automatiquement.</p>
 <form action="/admin/logout" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Se déconnecter</button></form>
 </main></body></html>
