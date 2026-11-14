@@ -223,3 +223,15 @@ deleting identity/history. Strict bounded forms preserve validation/stale input
 only after reauthorisation. Keep leading textarea newlines and distinguish an
 input’s prepared proof version from the latest stored version. No live grants are
 authorised by test fixture grants or source merges; full #29 acceptance stays open.
+
+## Private thread workbench and unknown instants
+
+Follow ADR 0025 and docs/story-threads.md. Thread cards/story choices/inverse previews
+are live-session private preparation; all-member counts and unpublished metadata
+must not enter public DTOs. Missing revision metadata stays explicitly incomplete,
+never fabricated ready content. Inverse eligibility is only a read observation;
+undo always rechecks exact states/versions transactionally. MemberInput.update_at
+Some is known at microsecond precision, None is explicitly unknown. Future forms
+must require a known/unknown decision. Never manufacture dates from added_at,
+publication/feed/request times or undo. Preserve bookkeeping and monotonic history.
+Full #29 curation/publication interface acceptance remains open.

@@ -86,7 +86,7 @@ async fn assign(service: &Threads, session: &Session, id: &str, story: &str, whe
             version(service, session, id).await,
             MemberInput {
                 story_id: story.into(),
-                update_at: instant(when),
+                update_at: Some(instant(when)),
             },
             "Explicit synthetic development instant",
         )
@@ -329,7 +329,7 @@ async fn threads_preserve_identity_counts_reversible_curation_and_public_boundar
                 2,
                 MemberInput {
                     story_id: "a".into(),
-                    update_at: instant("2026-11-12T00:00:00Z")
+                    update_at: Some(instant("2026-11-12T00:00:00Z"))
                 },
                 "Do not duplicate the current head"
             )
@@ -668,7 +668,7 @@ async fn threads_preserve_identity_counts_reversible_curation_and_public_boundar
                 0,
                 MemberInput {
                     story_id: "capacity-201".into(),
-                    update_at: instant("2026-11-14T00:00:00Z")
+                    update_at: Some(instant("2026-11-14T00:00:00Z"))
                 },
                 "Reject membership beyond the explicit bound"
             )
@@ -798,6 +798,166 @@ async fn threads_preserve_identity_counts_reversible_curation_and_public_boundar
             .unwrap(),
         count
     );
+    // Private workbench reads and explicit unknown development instants.
+    sqlx::query("GRANT SELECT ON news.story_revisions TO fixture_thread_writer")
+        .execute(&owner)
+        .await
+        .unwrap();
+    seed(&owner, "unknown-development", "fr", &[], &[], false).await;
+    let created = service
+        .create(
+            &publisher,
+            "workbench",
+            "Private curation candidate",
+            "Explicit subject identity",
+        )
+        .await
+        .unwrap();
+    let preview = service
+        .inverse_preview(&editor, created.action_id)
+        .await
+        .unwrap();
+    assert!(preview.eligible);
+    assert!(preview.before.is_empty());
+    assert_eq!(preview.after[0].version, 1);
+    let assigned = service
+        .assign(
+            &publisher,
+            "workbench",
+            1,
+            MemberInput {
+                story_id: "unknown-development".into(),
+                update_at: None,
+            },
+            "The development instant is explicitly unknown",
+        )
+        .await
+        .unwrap();
+    let current = service.get(&editor, "workbench").await.unwrap();
+    assert_eq!(current.members[0].update_at, None);
+    let stored: Option<DateTime<Utc>> =
+        sqlx::query_scalar("SELECT update_at FROM news.thread_stories WHERE thread_id='workbench'")
+            .fetch_one(&owner)
+            .await
+            .unwrap();
+    assert!(stored.is_none());
+    let added_at = current.members[0].added_at;
+    assert!(
+        !service
+            .inverse_preview(&editor, created.action_id)
+            .await
+            .unwrap()
+            .eligible
+    );
+    let preview = service
+        .inverse_preview(&editor, assigned.action_id)
+        .await
+        .unwrap();
+    assert!(preview.eligible);
+    assert!(preview.after[0].members[0].update_at.is_none());
+    let undone = service
+        .undo(
+            &publisher,
+            assigned.action_id,
+            &versions(&assigned),
+            "Undo only the unchanged membership",
+        )
+        .await
+        .unwrap();
+    assert!(
+        service
+            .get(&editor, "workbench")
+            .await
+            .unwrap()
+            .members
+            .is_empty()
+    );
+    service
+        .undo(
+            &publisher,
+            undone.action_id,
+            &versions(&undone),
+            "Restore the unknown instant without inventing one",
+        )
+        .await
+        .unwrap();
+    let current = service.get(&editor, "workbench").await.unwrap();
+    assert_eq!(current.members[0].update_at, None);
+    assert_eq!(current.members[0].added_at, added_at);
+    assert!(
+        !service
+            .inverse_preview(&editor, assigned.action_id)
+            .await
+            .unwrap()
+            .eligible
+    );
+    let known = service
+        .assign(
+            &publisher,
+            "workbench",
+            current.version,
+            MemberInput {
+                story_id: "unknown-development".into(),
+                update_at: Some(instant("2026-11-14T11:30:00.123456789Z")),
+            },
+            "Record an actually known instant",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        known.threads[0].members[0].update_at,
+        Some(instant("2026-11-14T11:30:00.123456Z"))
+    );
+    let unknown = service
+        .assign(
+            &publisher,
+            "workbench",
+            known.threads[0].version,
+            MemberInput {
+                story_id: "unknown-development".into(),
+                update_at: None,
+            },
+            "Correct an unsupported timestamp to explicitly unknown",
+        )
+        .await
+        .unwrap();
+    assert!(unknown.threads[0].members[0].update_at.is_none());
+    assert_eq!(unknown.threads[0].members[0].added_at, added_at);
+    let first = service.cards(&editor, None, size(1)).await.unwrap();
+    assert_eq!(first.items.len(), 1);
+    assert!(first.next.is_some());
+    let second = service
+        .cards(&editor, first.next.as_deref(), size(1))
+        .await
+        .unwrap();
+    assert!(second.items[0].id > first.items[0].id);
+    let selected = vec!["unknown-development".into()];
+    let choices = service
+        .story_choices(&editor, &selected, None)
+        .await
+        .unwrap();
+    let selected = choices
+        .items
+        .iter()
+        .find(|s| s.id == "unknown-development")
+        .unwrap();
+    assert_eq!(
+        selected.title.as_deref(),
+        Some("Synthetic unknown-development")
+    );
+    assert_eq!(selected.thread_id.as_deref(), Some("workbench"));
+    assert_eq!(selected.state, "draft");
+    assert!(choices.items.len() <= 21);
+    assert!(choices.next.is_some());
+    assert!(public.resolve("workbench").await.is_err());
+    assert!(public.cards(&editor, None, size(1)).await.is_err());
+    assert!(public.story_choices(&editor, &[], None).await.is_err());
+    assert!(
+        public
+            .inverse_preview(&editor, unknown.action_id)
+            .await
+            .is_err()
+    );
     sqlx::query("UPDATE news.admin_users SET role='editor' WHERE id='thread-publisher'")
         .execute(&owner)
         .await
@@ -827,6 +987,14 @@ async fn threads_preserve_identity_counts_reversible_curation_and_public_boundar
             .await,
         Err(AppError::Forbidden)
     ));
+    assert!(service.cards(&publisher, None, size(1)).await.is_err());
+    assert!(service.story_choices(&publisher, &[], None).await.is_err());
+    assert!(
+        service
+            .inverse_preview(&publisher, unknown.action_id)
+            .await
+            .is_err()
+    );
     writer.close().await;
     reader.close().await;
     owner.close().await;

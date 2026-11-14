@@ -27,7 +27,7 @@ or worker execution occurs.
 | --- | --- |
 | create | Stable caller-supplied ID, title, initial active state and immutable action |
 | edit | Versioned title/active/closed change on a canonical subject |
-| assign | Add a story or replace its explicit UTC update instant; reject another primary assignment |
+| assign | Add a story or replace its explicit known UTC instant / explicitly unknown instant; reject another primary assignment |
 | remove | Remove an explicit member, preserving it in audit history |
 | merge | Move source members to target; close source and retain its ID as a bounded alias |
 | split | Move a nonempty explicit subset into a new ID, leaving members behind |
@@ -97,3 +97,32 @@ restricted reader/editor roles, backup/restore and image/schema readiness before
 activation. No live migration, new role/grant, reader traffic change or Jarvis stop
 is performed by this feature. Rollback stops serving its consumers and retains
 identity/audit/membership data; do not delete subjects to revert a release.
+
+## Private curation preparation
+
+`cards(session, after, size)` provides bounded ID-keyset pages containing actual
+private thread state/version, alias destination and all-member counts. These counts
+must not be presented as anonymous public counts. `story_choices` provides 20 current
+revision metadata rows plus retained selections (bounded to 800 for two before/after
+snapshot pairs). An absent current revision remains absent metadata and must be
+labelled incomplete, never replaced with a made-up title or empty ready article.
+
+`inverse_preview(session, action_id)` reads immutable recorded before/after states
+and observes whether all current affected states still match and the action has not
+already been undone. It is private preparation only. Final `undo` reauthorises,
+locks and checks exact state/versions again; no preview flag grants authority. The
+complete operator forms and their browser journeys still belong to #29.
+
+`MemberInput.update_at` is now optional in the Rust service API. `Some(instant)`
+means actually known and is normalized only to database microsecond precision;
+`None` explicitly means unknown. Known callers must wrap their timestamp in Some.
+An HTTP interface must make this known/unknown decision explicit. Never silently
+use an empty timestamp, bookkeeping added_at, publication date or current time as
+a known development instant. Correcting a known instant to unknown is versioned
+and audited; the original added_at stays unchanged. Inverse actions preserve NULL
+and monotonic versions rather than inventing recency during undo/redo.
+
+Private story-title choices additionally need reviewed SELECT on story_revisions;
+the disposable fixture demonstrates that read grant, without changing any live
+identity. No schema/dependency or HTTP curation/publication route is added by this
+model slice. See ADR 0025 and its evidence record; reader integration stays #39.

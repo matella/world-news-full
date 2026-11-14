@@ -1,6 +1,6 @@
 # ADR 0024: stable origin identities with private configuration history
 
-Status: accepted for implementation. Related: #29; extends ADRs 0009 and 0023.
+Status: accepted for implementation. Related: #29; extends ADRs 0005 and 0023.
 
 Provide private registry directory/create/detail/update screens using the existing
 Registry service and pipeline renderer. A live publisher can create a stable origin
