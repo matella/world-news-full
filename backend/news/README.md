@@ -208,3 +208,14 @@ feed's metadata/cache/normalization job and machine parent link commit atomicall
 starts a scheduler. See [operations](../../docs/feed-recovery.md) and
 [ADR 0010](../../docs/architecture/0010-durable-feed-recovery.md). Machine extraction
 authority/orchestration and protected operator UI remain separate #21/#22 gates.
+
+## Authorized extraction jobs
+
+Publishers may issue one-hour article/version grants through `ExtractionAdmin`.
+`ExtractionQueue` uses machine DB authority with current issuer/rights/version and
+lease checks; snapshots distinguish worker jobs from human actors. Shared source
+cooldowns gate both manual and queued extraction. The explicit
+`world-news --work-extraction-once` never publishes or creates original drafts.
+See [operations](../../docs/extraction-jobs.md) and
+[ADR 0011](../../docs/architecture/0011-authorized-extraction-jobs.md). Bounded
+orchestration is the next #21 step; the web process still starts no background work.

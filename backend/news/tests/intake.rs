@@ -176,7 +176,7 @@ async fn rights_scoped_extraction_and_atomic_manual_fallback() {
         GRANT INSERT ON news.admin_sessions,news.admin_audit,news.stories,news.story_revisions,news.editorial_reviews,news.editorial_actions,news.publication_events,news.source_articles,news.intake_snapshots,news.intake_draft_links,news.intake_text TO fixture_intake_writer;
         GRANT UPDATE(state,current_revision_id,published_revision_id,review_state,lock_version,updated_at) ON news.stories TO fixture_intake_writer;
         GRANT UPDATE(intake_version,current_intake_id,extraction_state) ON news.source_articles TO fixture_intake_writer;
-        GRANT EXECUTE ON FUNCTION news.lock_source_for_fetch(text) TO fixture_intake_writer;
+        GRANT EXECUTE ON FUNCTION news.lock_source_for_fetch(text),news.extraction_retry_allowed(text) TO fixture_intake_writer;
         GRANT USAGE ON SEQUENCE news.admin_audit_id_seq,news.editorial_reviews_id_seq,news.editorial_actions_id_seq,news.publication_events_id_seq,news.intake_snapshots_id_seq TO fixture_intake_writer;")
         .execute(&owner).await.unwrap();
     url.set_username("fixture_intake_reader").unwrap();

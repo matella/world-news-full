@@ -78,12 +78,17 @@ source implementation and disposable tests continue without production access.
   Feed recovery advances in the next slice; machine extraction authority and daemon
   activation remain #21 gates.
 
-- Feed recovery branch, based on #63: second #21 slice with leased attempts,
+- PR #64, based on #63: second #21 slice with leased attempts,
   stale/cache fences, abandoned-work recovery, retry budgets/source minimums,
   publisher controls, atomic machine normalization handoff and explicit CLI.
   Eleven disposable DB suites include process-kill/recovery and upgrade cases;
-  34 unit/in-process and final CLI/process/strict checks passed; CI pending at opening.
+  34 unit/in-process and final CLI/process/strict checks passed; both CI workflows passed.
 
-Next: #21 machine extraction authority and bounded orchestration, then admin UI,
+- Authorized extraction branch, based on #64: third #21 slice with expiring
+  publisher grants, separate machine snapshot attribution, fenced/rights-aware
+  execution, retry/recovery and shared manual/machine source cooldowns. Twelve DB
+  suites passed; final local checks/CI are recorded in the evidence and linked PR.
+
+Next: #21 bounded orchestration, then admin UI,
 article/citation/length/editor and edition policy. Service success does not complete
 those issues or authorise a live release.

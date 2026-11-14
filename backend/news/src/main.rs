@@ -83,6 +83,27 @@ async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
             ExitCode::SUCCESS
         });
     }
+    if arguments == ["--work-extraction-once"] {
+        let queue = world_news::intake::extraction_jobs::ExtractionQueue::new(
+            pool.clone(),
+            &config.public_url,
+        )
+        .map_err(|e| std::io::Error::other(e.category()))?;
+        let result = queue.work_once().await;
+        pool.close().await;
+        let result = result?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(
+            if matches!(
+                result,
+                world_news::intake::extraction_jobs::ExtractionOutcome::Failed { .. }
+            ) {
+                ExitCode::from(2)
+            } else {
+                ExitCode::SUCCESS
+            },
+        );
+    }
     if arguments == ["--work-normalization-once"] {
         let result = world_news::intake::jobs::Queue::new(pool.clone())
             .work_once()
