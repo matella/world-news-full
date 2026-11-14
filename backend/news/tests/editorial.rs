@@ -32,6 +32,20 @@ fn config(reader: &str, writer: Option<&str>) -> Config {
 }
 fn input(title: &str) -> RevisionInput {
     RevisionInput {
+        evidence: Some(world_news::sourcing::SourcePackage {
+            statement: Some(world_news::sourcing::SourceStatement {
+                mode: world_news::sourcing::SourceMode::Original,
+                attribution: "Explicit original synthetic fixture, no external reporting".into(),
+                limits: None,
+            }),
+            firsthand: vec![world_news::sourcing::FirsthandEvidence {
+                method: world_news::sourcing::FirsthandMethod::Observation,
+                claim_ids: vec![],
+                attribution: "Synthetic test observation".into(),
+                private_note: "Synthetic fixture evidence only".into(),
+            }],
+            ..Default::default()
+        }),
         title: title.into(),
         standfirst: Some("Synthetic introduction".into()),
         summary: None,
@@ -137,6 +151,7 @@ async fn editorial_transactions_preserve_publication_history_and_live_permission
         GRANT UPDATE(state,current_revision_id,published_revision_id,review_state,lock_version,updated_at) ON news.stories TO fixture_editorial_writer;
         GRANT USAGE ON SEQUENCE news.admin_audit_id_seq,news.editorial_reviews_id_seq,news.editorial_actions_id_seq,news.publication_events_id_seq TO fixture_editorial_writer;")
         .execute(&owner).await.unwrap();
+    sqlx::raw_sql("GRANT SELECT ON news.citations,news.source_articles,news.article_origin_labels,news.reporting_origins TO fixture_editorial_writer; GRANT EXECUTE ON FUNCTION news.lock_citation_evidence(text) TO fixture_editorial_writer;").execute(&owner).await.unwrap();
     url.set_username("fixture_editorial_reader").unwrap();
     url.set_password(Some("synthetic-editorial-reader"))
         .unwrap();

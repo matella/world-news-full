@@ -5,12 +5,12 @@
 {% match block %}
 {% when ContentBlock::Paragraph { text } %}<p>{{ text }}</p>
 {% when ContentBlock::Heading { text, level } %}{% if *level == 2 %}<h2>{{ text }}</h2>{% else %}<h3>{{ text }}</h3>{% endif %}
-{% when ContentBlock::Claim { id, text } %}<p id="claim-{{ id }}">{{ text }}</p>
+{% when ContentBlock::Claim { id, text } %}<p id="claim-{{ id }}">{{ text }}{% include "claim_refs.html" %}</p>
 {% when ContentBlock::Section { role, blocks } %}
 <section aria-labelledby="section-{{ role.key() }}"><h2 id="section-{{ role.key() }}" lang="fr">{{ role.label() }}</h2>
 {% for child in blocks %}{% match child %}
 {% when SectionBlock::Paragraph { text } %}<p>{{ text }}</p>
-{% when SectionBlock::Claim { id, text } %}<p id="claim-{{ id }}">{{ text }}</p>
+{% when SectionBlock::Claim { id, text } %}<p id="claim-{{ id }}">{{ text }}{% include "claim_refs.html" %}</p>
 {% endmatch %}{% endfor %}
 </section>
 {% endmatch %}

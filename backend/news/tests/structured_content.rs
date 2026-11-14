@@ -75,6 +75,20 @@ async fn public(app: &Router, path: &str) -> (StatusCode, String) {
 }
 fn input(format: ArticleFormat) -> RevisionInput {
     RevisionInput {
+        evidence: Some(world_news::sourcing::SourcePackage {
+            statement: Some(world_news::sourcing::SourceStatement {
+                mode: world_news::sourcing::SourceMode::Original,
+                attribution: "Explicit original synthetic fixture, no external reporting".into(),
+                limits: None,
+            }),
+            firsthand: vec![world_news::sourcing::FirsthandEvidence {
+                method: world_news::sourcing::FirsthandMethod::Observation,
+                claim_ids: vec!["fact-1".into(), "limit-1".into()],
+                attribution: "Synthetic test observation".into(),
+                private_note: "Synthetic fixture evidence only".into(),
+            }],
+            ..Default::default()
+        }),
         title: "Synthetic <script>headline</script>".into(),
         standfirst: Some("Repeated authored prose marker.".into()),
         summary: Some("Distinct explicit overview marker.".into()),
@@ -137,6 +151,7 @@ async fn structured_formats_round_trip_and_render_as_inert_prose() {
     .unwrap();
     sqlx::raw_sql("CREATE ROLE fixture_structure_reader LOGIN PASSWORD 'synthetic-structure-reader'; GRANT USAGE ON SCHEMA news TO fixture_structure_reader; GRANT SELECT ON news.schema_version,news.public_stories,news.public_revisions,news.public_editions,news.public_edition_entries,news.public_citations,news.public_notices,news.public_translations TO fixture_structure_reader;
     CREATE ROLE fixture_structure_writer LOGIN PASSWORD 'synthetic-structure-writer'; GRANT USAGE ON SCHEMA news TO fixture_structure_writer; GRANT SELECT ON news.schema_version,news.admin_users,news.admin_sessions,news.stories,news.story_revisions,news.editorial_actions,news.editorial_reviews,news.publication_events TO fixture_structure_writer; GRANT INSERT ON news.admin_sessions,news.admin_audit,news.stories,news.story_revisions,news.editorial_actions,news.editorial_reviews,news.publication_events TO fixture_structure_writer; GRANT UPDATE(state,current_revision_id,published_revision_id,review_state,lock_version,updated_at) ON news.stories TO fixture_structure_writer; GRANT UPDATE(failed_attempts,locked_until) ON news.admin_users TO fixture_structure_writer; GRANT UPDATE(revoked_at) ON news.admin_sessions TO fixture_structure_writer; GRANT USAGE ON SEQUENCE news.admin_audit_id_seq,news.editorial_actions_id_seq,news.editorial_reviews_id_seq,news.publication_events_id_seq TO fixture_structure_writer;").execute(&owner).await.unwrap();
+    sqlx::raw_sql("GRANT SELECT ON news.citations,news.source_articles,news.article_origin_labels,news.reporting_origins TO fixture_structure_writer; GRANT EXECUTE ON FUNCTION news.lock_citation_evidence(text) TO fixture_structure_writer;").execute(&owner).await.unwrap();
     url.set_username("fixture_structure_reader").unwrap();
     url.set_password(Some("synthetic-structure-reader"))
         .unwrap();
@@ -262,6 +277,7 @@ async fn structured_formats_round_trip_and_render_as_inert_prose() {
         }
     }
     let mut heading = input(ArticleFormat::Brief);
+    heading.evidence = None;
     heading.body = vec![ContentBlock::Heading {
         level: 2,
         text: "Only a heading".into(),

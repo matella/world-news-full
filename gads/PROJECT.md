@@ -92,9 +92,17 @@ Article reporting-origin evidence is publisher-authored and article-specific;
 registry links never certify it. Preserve sealed versioned assertions, private notes
 and captured citation evidence; classification edits copy the exact origin versions.
 Do not guess legacy anchors or turn outlet counts into independent-reporting counts.
-Public views must exclude private evidence/actors. See docs/article-origins.md; full
-claim editing, disagreements and publication policy remain #27. Workers receive no
-new curator authority and live schema/grant changes require their release plan.
+Public views must exclude private evidence/actors. See docs/article-origins.md and
+docs/citation-policy.md. Source packages belong to immutable revisions: source-only
+changes clone prose/provenance and reset review; text edits never inherit sourcing
+implicitly. Publication locks/rechecks evidence and requires explicit attribution,
+covered factual anchors and public limits for single/uncertain-origin reporting.
+Original methods need real human declarations/private evidence, never manufactured
+external sources or automatic attestations. Preserve explicit historical lineage.
+Public projections allowlist nested fields; do not serialize private packages.
+Counts distinguish canonical documents, declared outlets and documented origins,
+not truth or guaranteed independence. Workers receive no new curator authority;
+word budgets/editor web acceptance remain #28/#29 and live changes their release plan.
 
 ## Commands and evidence
 

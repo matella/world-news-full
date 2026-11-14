@@ -127,7 +127,7 @@ source implementation and disposable tests continue without production access.
   workflows passed. No inferred legacy sections or rewritten prose. Citation/length
   acceptance remains #27/#28; rich-body rollback readers must support the format.
 
-Next: #27 citations and #28 word budgets,
+Next: #28 word budgets after the #27 citation-package gate passes,
 article/citation/length/editor and edition policy. Independent edition-publication
 acceptance remains gated on #29–#31; service success does not complete those issues
 or authorize a live release.
@@ -147,3 +147,13 @@ acceptance evidence. The GADS issue permits explicit reporting of unavailable
 runtimes; a missing Claude CLI is a documented compatibility limit, not a claim
 that the installed hook ran. No live Jarvis, data, account, volume or traffic
 change occurred. See docs/operations/code-integration.md for release boundaries.
+
+## Article-origin and sourcing implementation
+
+Merged #74 provides article-specific origin assertions, immutable citation evidence
+and safe anchors; 17 DB suites, three Chromium flows and all PR checks passed. #19
+is complete. The citation-package branch completes #27 with versioned mappings,
+private original-method evidence, attributed disagreements, explicit count
+definitions and a sourcing publication gate. Validation and remaining limits are
+recorded in docs/evidence/citation-policy.md. Publication web controls still wait
+for #28/#29, and complete edition/publication/release acceptance remains separate.
