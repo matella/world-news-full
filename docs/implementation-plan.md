@@ -54,13 +54,17 @@ source implementation and disposable tests continue without production access.
   configuration, explicit rights/storage/display policy, immutable private audit,
   soft disable and captured historical attribution. All six DB suites passed;
   no source is fetched or subscribed by registry operations. GitHub CI passed.
-- Safe feed branch, based on #59: #18 bounded RSS/Atom HTTP/parser services,
+- PR #60, based on #59: #18 bounded RSS/Atom HTTP/parser services,
   destination/DNS pinning, due/retry status and durable metadata batches committed
   before cache advancement. 29 unit tests and seven DB suites passed. No startup
-  polling loop, arbitrary production subscription or publication side effect.
+  polling loop, arbitrary production subscription or publication side effect. Both
+  CI workflows passed.
 
-#13 preceded #12 because both depend on #11 and the importer reuses typed content
-and error boundaries. This changes implementation order, not the dependency graph.
-Next: #19 conservative article normalisation/deduplication from durable metadata,
+- Normalization branch, based on #60: #19 deterministic URL identity, immutable
+  entry observations and idempotent receipts; conservative conflicts/changes never
+  overwrite existing article identity or text. All eight disposable DB suites and
+  30 unit/in-process tests passed. CI is pending at opening.
+
+Next: finish #19 checks,
 then rights-aware extraction/jobs and article/editor/edition policy. Service success does not complete
 those issues or authorise a live release.
