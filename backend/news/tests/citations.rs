@@ -66,6 +66,9 @@ async fn login(app: &Router, auth: &AuthService, user: &str) -> Session {
 }
 fn draft() -> RevisionInput {
     RevisionInput {
+        length_override: Some(
+            "Explicitly short synthetic test fixture; no padding or real article.".into(),
+        ),
         title: "Synthetic sourced account".into(),
         standfirst: None,
         summary: None,
@@ -635,6 +638,18 @@ async fn citations_enforce_revision_attribution_and_preserve_public_private_boun
             legacy_head.lock_version,
             historical_package,
             "Add transparent historical limitations",
+        )
+        .await
+        .unwrap();
+    let legacy_head = service
+        .length_revision(
+            &editor,
+            "historical",
+            legacy_head.lock_version,
+            Some(
+                "Short historical metadata correction; preserve the original archive text.".into(),
+            ),
+            "Explicit historical length review",
         )
         .await
         .unwrap();

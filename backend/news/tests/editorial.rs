@@ -32,6 +32,9 @@ fn config(reader: &str, writer: Option<&str>) -> Config {
 }
 fn input(title: &str) -> RevisionInput {
     RevisionInput {
+        length_override: Some(
+            "Explicitly short synthetic test fixture; no padding or real article.".into(),
+        ),
         evidence: Some(world_news::sourcing::SourcePackage {
             statement: Some(world_news::sourcing::SourceStatement {
                 mode: world_news::sourcing::SourceMode::Original,

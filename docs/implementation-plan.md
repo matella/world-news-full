@@ -157,3 +157,13 @@ private original-method evidence, attributed disagreements, explicit count
 definitions and a sourcing publication gate. Validation and remaining limits are
 recorded in docs/evidence/citation-policy.md. Publication web controls still wait
 for #28/#29, and complete edition/publication/release acceptance remains separate.
+
+## Citation completion and article-length implementation
+
+PR #75 merged at fbc487abbc626d016c28af76788614847d51166f after all three workflows
+passed; #27 is closed with its 45-unit/18-DB/four-browser evidence. Article-length
+work (#28) adds configurable ranges/language overrides, Unicode count-only rules,
+revision-bound public exception reasons, current-policy publication checks, private
+counter/form and honest reader estimates. See docs/article-length.md and ADR 0019;
+its final verification is tracked in docs/evidence/article-length.md. No product
+text is padded or shortened. Full article editor #29 and edition acceptance remain.

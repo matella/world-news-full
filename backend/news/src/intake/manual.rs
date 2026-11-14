@@ -206,8 +206,14 @@ impl IntakeService {
         )
         .await?;
         if let Some(draft) = draft {
-            let head =
-                editorial::create_in_transaction(&mut tx, &actor, &draft.id, draft.input).await?;
+            let head = editorial::create_in_transaction(
+                &mut tx,
+                &actor,
+                &draft.id,
+                draft.input,
+                &crate::domain::EditorialPolicy::repository(),
+            )
+            .await?;
             sqlx::query("INSERT INTO news.intake_draft_links(snapshot_id,story_id,initial_revision_id) VALUES($1,$2,$3)").bind(snapshot).bind(head.id).bind(head.current_revision_id).execute(&mut *tx).await.map_err(db)?;
         }
         let head = load_head(&mut tx, id).await?;

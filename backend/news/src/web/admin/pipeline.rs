@@ -46,6 +46,8 @@ struct View {
     next: Option<String>,
     article: Option<Revision>,
     evidence: Option<crate::citations::Report>,
+    length: Option<crate::length::Report>,
+    length_private: bool,
 }
 struct Link {
     label: String,
@@ -161,6 +163,8 @@ fn page(state: &AppState, session: &Session, title: impl Into<String>) -> View {
         next: None,
         article: None,
         evidence: None,
+        length: None,
+        length_private: true,
     }
 }
 fn publisher(session: &Session) -> bool {
@@ -368,6 +372,7 @@ pub(super) fn routes() -> Router<AppState> {
         .route("/admin/batches/{id}/enqueue", post(enqueue_batch))
         .route("/admin/drafts/{id}", get(view_draft))
         .route("/admin/drafts/{id}/classification", post(classify_draft))
+        .route("/admin/drafts/{id}/length", post(update_length))
 }
 async fn css() -> impl IntoResponse {
     (
@@ -1034,7 +1039,7 @@ async fn view_draft(
     Path(id): Path<String>,
 ) -> Response {
     let result = async {
-        let service = EditorialService::new(pool(&state)?);
+        let service = EditorialService::with_policy(pool(&state)?,std::sync::Arc::new(state.config.editorial.clone()));
 
         let head = service.head(&session, &id).await?;
 
@@ -1066,6 +1071,11 @@ async fn view_draft(
         fields.push(field("reason", "Motif du classement", "", "textarea", true));
         v.forms.push(FormSpec {title:"Classer cette version".into(), action:action("drafts", &id, "classification"), button:"Enregistrer le classement dans une nouvelle version".into(), fields});
         v.evidence=Some(crate::citations::Citations::new(pool(&state)?).private(&session,&revision).await?);
+        let length=service.length_report(&session,&revision.id).await?;
+        v.forms.push(FormSpec {title:"Évaluer la longueur sans modifier le texte".into(),action:action("drafts",&id,"length"),button:"Créer une version à relire".into(),fields:vec![
+            hidden("version",head.lock_version),field("override_reason","Motif public de dérogation (si nécessaire)",length.recorded.as_ref().and_then(|r|r.override_reason.as_deref()).unwrap_or(""),"textarea",false),
+            field("reason","Motif de cette révision","","textarea",true)]});
+        v.length=Some(length);
         v.article=Some(revision);
 
         Ok(v)
@@ -1073,6 +1083,36 @@ async fn view_draft(
     .await;
 
     render(&state, result)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LengthInput {
+    csrf: String,
+    version: i64,
+    override_reason: Option<String>,
+    reason: String,
+}
+async fn update_length(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    Path(id): Path<String>,
+    input: Result<Form<LengthInput>, FormRejection>,
+) -> Response {
+    let result = async {
+        let input = form(input)?;
+        let _ = input.csrf;
+        let override_reason = input.override_reason.filter(|v| !v.trim().is_empty());
+        EditorialService::with_policy(
+            pool(&state)?,
+            std::sync::Arc::new(state.config.editorial.clone()),
+        )
+        .length_revision(&session, &id, input.version, override_reason, &input.reason)
+        .await?;
+        Ok(route("drafts", &id))
+    }
+    .await;
+    redirect(&state, result)
 }
 
 async fn classify_draft(
@@ -1114,16 +1154,19 @@ async fn classify_draft(
                 return Err(AppError::Validation("Unknown classification field."));
             }
         }
-        EditorialService::new(pool(&state)?)
-            .reclassify(
-                &session,
-                &id,
-                version,
-                classification,
-                &reason,
-                &state.config.taxonomy,
-            )
-            .await?;
+        EditorialService::with_policy(
+            pool(&state)?,
+            std::sync::Arc::new(state.config.editorial.clone()),
+        )
+        .reclassify(
+            &session,
+            &id,
+            version,
+            classification,
+            &reason,
+            &state.config.taxonomy,
+        )
+        .await?;
         Ok(route("drafts", &id))
     }
     .await;
@@ -1712,6 +1755,7 @@ async fn draft(
         let original = OriginalDraft {
             id: story.clone(),
             input: RevisionInput {
+                length_override: None,
                 evidence: None,
                 title: input.title,
                 standfirst: None,

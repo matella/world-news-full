@@ -102,7 +102,20 @@ external sources or automatic attestations. Preserve explicit historical lineage
 Public projections allowlist nested fields; do not serialize private packages.
 Counts distinguish canonical documents, declared outlets and documented origins,
 not truth or guaranteed independence. Workers receive no new curator authority;
-word budgets/editor web acceptance remain #28/#29 and live changes their release plan.
+word/editor web acceptance and live changes retain their explicit release gates.
+
+Length is count-only guidance: never pad, truncate or rewrite prose to meet a range.
+Use docs/article-length.md and word-v1: NFC applies only to count input, authored body
+headings/prose count, overview/reference/interface text does not. Keep unsupported
+language counts approximate and omit a misleading numeric reading-time estimate.
+Use the validated application policy via EditorialService::with_policy; bundled
+reference defaults do not replace configured publication policy. Assessments and
+public override reasons belong to immutable revisions. Length-only edits retain
+prose/sourcing/exact citation versions and reset review; prose changes do not inherit
+exceptions. Recheck current policy/counts and required reasons at publication; no
+reason rescues zero-word content. Public reasons are intentionally public, actor and
+revision-change notes are not. Private counter/range forms use existing role/session/
+version/CSRF/Origin checks. Complete article editing/publication UI remains #29.
 
 ## Commands and evidence
 

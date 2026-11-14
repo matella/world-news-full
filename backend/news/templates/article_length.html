@@ -1,0 +1,8 @@
+{% if let Some(length) = length %}
+<section aria-label="Longueur et temps de lecture" lang="fr">
+<p>{% if length.current.supported %}{{ length.current.words }} mots dans le corps · Temps de lecture estimé : environ {{ length.reading_minutes }} min ({{ length.reading_words_per_minute }} mots/min).{% else %}Comptage indicatif : {{ length.current.words }} unités lexicales · Temps de lecture non estimé : comptage non validé pour cette langue.{% endif %}</p>
+{% if length_private %}<p>Repère actuel pour ce format : {{ length.current.min_words }}–{{ length.current.max_words }} mots. La longueur ne certifie pas la qualité éditoriale.</p>{% endif %}
+{% if let Some(recorded) = length.recorded %}{% if let Some(reason) = recorded.override_reason %}<p>Dérogation conservée pour cette version : {{ reason }}</p>{% endif %}{% endif %}
+{% if length_private %}{% for warning in length.warnings %}<p>{{ warning }}</p>{% endfor %}{% endif %}
+</section>
+{% endif %}
