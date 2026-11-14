@@ -39,10 +39,12 @@ not yet an editor or word-count enforcement; those are #28/#29.
 
 ## Modules and endpoints
 
-- `domain`: validated editorial policy; article/revision models arrive with schema.
+- `domain`/`content`: validated editorial policy and typed revision/body models.
 - `config`: typed startup settings with no provider/secret logging.
 - `persistence`: bounded SQLx pool, explicit embedded migrations and schema readiness.
 - `web`: Axum routes and escaped Askama HTML; shared by the executable and tests.
+- `repository`/`error`: typed public/draft persistence and redacted failure classes;
+  see [API contracts](../../docs/persistence-api.md).
 
 `/health/live` is process liveness. `/health/ready` checks every migration version
 and checksum via a restricted metadata view; absent/partial/drifted schemas return
