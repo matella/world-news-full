@@ -80,6 +80,14 @@ Use the bounded public views/resolver and repeatable timeline snapshot, not priv
 tables or separate racing resolve/member reads. See docs/story-threads.md; editor/
 reader consumers remain their own gates. Never delete identity/history for rollback.
 
+Article bodies use plain bounded JSON blocks, never raw HTML authority. Preserve
+explicit overview fields and original-language prose; suppress duplicate display
+without rewriting stored content. Context/uncertainty and claim IDs must be explicit,
+unique and validated. Do not infer them from legacy text or treat anchors as cited
+facts. Share the escaped public/private body partial. Rich-block writes require
+compatible reader/rollback images even without SQL migration; never flatten/delete
+new blocks to accommodate an old binary. See docs/article-structure.md.
+
 ## Commands and evidence
 
 | Purpose | Command from repository root |

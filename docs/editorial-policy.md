@@ -29,7 +29,8 @@ warning, never a reason to omit essential caveats or fabricate filler.
 - Headline: accurate statement, not a stronger claim than the sources support.
 - Standfirst: short introduction; summary: optional concise overview distinct
   from the full body. Neither is silently manufactured from missing legacy data.
-- Body: paragraphs/headings; context/uncertainty sections only when useful.
+- Body: plain structured paragraphs/headings/claim anchors; explicit context/uncertainty
+  sections only when useful. See [block contract](article-structure.md).
 - Reporting, analysis, opinion and automated summary are distinct labels.
   Analysis is not opinion; opinion needs explicit attribution. Legacy synthesis
   is not automatically independently verified reporting.

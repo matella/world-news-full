@@ -1,0 +1,17 @@
+<p lang="fr">{{ revision.format.label() }} · {{ revision.kind.label() }}</p>
+{% if let Some(text) = revision.visible_standfirst() %}<p class="standfirst">{{ text }}</p>{% endif %}
+{% if let Some(text) = revision.visible_summary() %}<details><summary lang="fr">En bref</summary><p>{{ text }}</p></details>{% endif %}
+{% for block in revision.body %}
+{% match block %}
+{% when ContentBlock::Paragraph { text } %}<p>{{ text }}</p>
+{% when ContentBlock::Heading { text, level } %}{% if *level == 2 %}<h2>{{ text }}</h2>{% else %}<h3>{{ text }}</h3>{% endif %}
+{% when ContentBlock::Claim { id, text } %}<p id="claim-{{ id }}">{{ text }}</p>
+{% when ContentBlock::Section { role, blocks } %}
+<section aria-labelledby="section-{{ role.key() }}"><h2 id="section-{{ role.key() }}" lang="fr">{{ role.label() }}</h2>
+{% for child in blocks %}{% match child %}
+{% when SectionBlock::Paragraph { text } %}<p>{{ text }}</p>
+{% when SectionBlock::Claim { id, text } %}<p id="claim-{{ id }}">{{ text }}</p>
+{% endmatch %}{% endfor %}
+</section>
+{% endmatch %}
+{% endfor %}

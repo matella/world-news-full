@@ -118,6 +118,15 @@ def main():
             worker_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{worker_database}")
             subprocess.run(["cargo","test","-p","world-news","--locked","--test","worker","--","--ignored","--test-threads=1"],cwd=ROOT,env=worker_env,check=True)
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+worker_database)
+        if (ROOT/"backend/news/tests/structured_content.rs").is_file():
+            structured_database=database+"_structured"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+structured_database)
+            structured_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{structured_database}")
+            subprocess.run(["cargo","test","-p","world-news","--locked","--test","structured_content","--","--ignored","--test-threads=1"],cwd=ROOT,env=structured_env,check=True)
+            if os.environ.get("WORLDNEWS_BROWSER_CHECK") == "1":
+                from test_structured_content import exercise as exercise_content
+                exercise_content(ROOT/"target/debug/world-news",f"postgres://fixture_structure_reader:synthetic-structure-reader@127.0.0.1:{port}/{structured_database}")
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+structured_database)
         if (ROOT/"backend/news/tests/threads.rs").is_file():
             threads_database=database+"_threads"
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+threads_database)

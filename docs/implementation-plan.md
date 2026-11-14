@@ -111,13 +111,19 @@ source implementation and disposable tests continue without production access.
   real admin classification and transitional science-grouping browser checks passed.
   See docs/evidence/taxonomy.md; edition/search consumers remain #30/#38.
 
-- Stable thread branch, based on #69: #25 primary subject identities, explicit
+- PR #70, based on #69: #25 primary subject identities, explicit
   update instants, deterministic public heads/counts, bounded queries and audited
   merge/split/undo. Fifteen DB suites include concurrent timeline resolution,
   reversal, ambiguity-preserving upgrade and private/withdrawn/alias bounds. Editor
   controls #29, search #38 and reader timelines #39 consume these core services.
 
-Next: #26 article structure, #27 citations and #28 word budgets,
+- Structured article branch, based on #70: #26 explicit overview/full-body fields,
+  plain claim/context/uncertainty blocks, bounded unique anchors and shared escaped
+  public/private rendering. 43 Rust tests, sixteen DB suites and three Chromium
+  workflows passed. No inferred legacy sections or rewritten prose. Citation/length
+  acceptance remains #27/#28; rich-body rollback readers must support the format.
+
+Next: #27 citations and #28 word budgets,
 article/citation/length/editor and edition policy. Independent edition-publication
 acceptance remains gated on #29–#31; service success does not complete those issues
 or authorize a live release.

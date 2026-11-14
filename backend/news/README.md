@@ -46,6 +46,7 @@ not yet an editor or word-count enforcement; those are #28/#29.
 - `config`: typed startup settings with no provider/secret logging.
 - `persistence`: bounded SQLx pool, explicit embedded migrations and schema readiness.
 - `web`: Axum routes and escaped Askama HTML; shared by the executable and tests.
+  Public/private article bodies share the [plain block contract](../../docs/article-structure.md).
 - `threads`: stable subject curation, reversible audit and public-only head/timeline
   queries; see [thread contracts](../../docs/story-threads.md). Editor/reader UI
   integration remains in the later editor/timeline issues.

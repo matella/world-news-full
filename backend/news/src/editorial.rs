@@ -244,13 +244,9 @@ impl EditorialService {
             return Err(AppError::Conflict);
         }
         let revision = load_revision(&mut tx, &head.current_revision_id).await?;
-        if !revision.body.iter().any(|b| match b {
-            ContentBlock::Paragraph { text } | ContentBlock::Heading { text, .. } => {
-                !text.trim().is_empty()
-            }
-        }) {
+        if !revision.body.iter().any(ContentBlock::has_prose) {
             return Err(AppError::Validation(
-                "Review requires a nonempty article body.",
+                "Review requires nonempty article prose.",
             ));
         }
         sqlx::query("UPDATE news.stories SET review_state='in_review',state=CASE WHEN published_revision_id IS NULL THEN 'in_review' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
@@ -492,7 +488,7 @@ async fn insert_revision(
     actor: &Principal,
     input: RevisionInput,
 ) -> Result<String, AppError> {
-    sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT $1,COALESCE(MAX(number),0)+1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'{\"workflow\":\"editorial\",\"origin\":\"manual_submission\"}'::jsonb FROM news.story_revisions WHERE story_id=$1 RETURNING id")
+    sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT $1,COALESCE(MAX(number),0)+1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'{\"workflow\":\"editorial\",\"origin\":\"manual_submission\",\"body_schema\":2}'::jsonb FROM news.story_revisions WHERE story_id=$1 RETURNING id")
         .bind(id).bind(input.title).bind(input.standfirst).bind(input.summary).bind(Json(input.body)).bind(input.language).bind(input.format.as_str()).bind(input.kind.as_str()).bind(input.topics).bind(input.geography).bind(actor.id()).bind(input.reason)
         .fetch_one(&mut **tx).await.map_err(|e|AppError::database("editorial_save_revision",e))
 }
