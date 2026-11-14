@@ -88,6 +88,14 @@ facts. Share the escaped public/private body partial. Rich-block writes require
 compatible reader/rollback images even without SQL migration; never flatten/delete
 new blocks to accommodate an old binary. See docs/article-structure.md.
 
+Article reporting-origin evidence is publisher-authored and article-specific;
+registry links never certify it. Preserve sealed versioned assertions, private notes
+and captured citation evidence; classification edits copy the exact origin versions.
+Do not guess legacy anchors or turn outlet counts into independent-reporting counts.
+Public views must exclude private evidence/actors. See docs/article-origins.md; full
+claim editing, disagreements and publication policy remain #27. Workers receive no
+new curator authority and live schema/grant changes require their release plan.
+
 ## Commands and evidence
 
 | Purpose | Command from repository root |

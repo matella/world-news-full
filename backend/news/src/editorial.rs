@@ -218,7 +218,7 @@ impl EditorialService {
             .bind(id).bind(&old.id).bind(&classification.topics).bind(&classification.geography)
             .bind(actor.id()).bind(reason).bind(Json(provenance)).fetch_one(&mut *tx).await
             .map_err(|e|AppError::database("classification_revision",e))?;
-        sqlx::query("INSERT INTO news.citations(revision_id,claim_id,source_article_id,location) SELECT $1,claim_id,source_article_id,location FROM news.citations WHERE revision_id=$2")
+        sqlx::query("INSERT INTO news.citations(revision_id,claim_id,source_article_id,location,anchor_id,origin_version) SELECT $1,claim_id,source_article_id,location,anchor_id,origin_version FROM news.citations WHERE revision_id=$2")
             .bind(&revision).bind(&old.id).execute(&mut *tx).await.map_err(|e|AppError::database("classification_citations",e))?;
         sqlx::query("UPDATE news.stories SET current_revision_id=$2,review_state='draft',state=CASE WHEN published_revision_id IS NULL THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
             .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("classification_head",e))?;
