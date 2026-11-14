@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }} · {{ masthead }}</title>
+{% if let Some(url) = canonical %}<link rel="canonical" href="{{ url }}">{% endif %}
+</head>
+<body>
+<a href="#contenu">Aller au contenu</a>
+<header><a href="/">{{ masthead }}</a><nav aria-label="Navigation principale"><a href="/archive">Archives</a> · <a href="/recherche">Recherche</a> · <a href="/sujets">Sujets</a></nav></header>
+<main id="contenu">
+<h1{% if let Some(revision) = article %} lang="{{ revision.language }}"{% endif %}>{{ title }}</h1>
+{% if let Some(text) = message %}<p>{{ text }}</p>{% endif %}
+{% if let Some(revision) = article %}
+<article lang="{{ revision.language }}">
+{% if legacy %}<p>Archive importée. Le processus de génération et la vérification d’origine ne sont pas attestés.</p>{% endif %}
+<p>Révision conservée : <time>{{ revision.created_at }}</time>.</p>
+{% if let Some(text) = revision.standfirst %}<p>{{ text }}</p>{% endif %}
+{% for block in revision.body %}
+{% match block %}
+{% when ContentBlock::Paragraph { text } %}<p>{{ text }}</p>
+{% when ContentBlock::Heading { text, level } %}{% if *level == 2 %}<h2>{{ text }}</h2>{% else %}<h3>{{ text }}</h3>{% endif %}
+{% endmatch %}
+{% endfor %}
+<section aria-labelledby="sources"><h2 id="sources">Sources et références</h2>
+{% if sources.is_empty() %}<p>Aucune référence disponible pour cette révision.</p>{% else %}
+<ul>{% for source in sources %}<li><a href="{{ source.original_url }}" rel="noopener noreferrer">{{ source.source_name }}</a></li>{% endfor %}</ul>
+{% endif %}
+</section>
+</article>
+{% endif %}
+{% if !items.is_empty() %}<ul>{% for item in items %}<li>{% if let Some(href) = item.href %}<a href="{{ href }}">{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}{% if !item.detail.is_empty() %} — {{ item.detail }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+{% if let Some(href) = next %}<a href="{{ href }}" rel="next">Éditions précédentes</a>{% endif %}
+</main>
+</body>
+</html>

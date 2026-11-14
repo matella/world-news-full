@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub fn valid_id(value: &str) -> bool {
     !value.is_empty()
+        && !matches!(value, "." | "..")
         && value.chars().count() <= 200
         && !value
             .chars()
