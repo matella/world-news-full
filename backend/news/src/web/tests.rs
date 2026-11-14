@@ -17,6 +17,7 @@ fn state(timeout: Duration) -> AppState {
         pool,
         request_timeout: timeout,
         auth: None,
+        editor_pool: None,
     }
 }
 async fn app() -> Router {

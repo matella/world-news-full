@@ -1,3 +1,4 @@
+mod pipeline;
 use super::*;
 use crate::auth::{AuthError, Login, Permission, Role, Session};
 use axum::{Form, extract::rejection::FormRejection, http::HeaderMap, routing::post};
@@ -30,6 +31,7 @@ pub(super) fn routes(state: AppState) -> Router<AppState> {
         .route("/admin/login", get(login_form).post(login))
         .route("/admin/logout", post(logout))
         .route("/admin/publishing", get(publishing))
+        .merge(pipeline::routes())
         .route("/admin/{*rest}", get(super::not_found))
         .route_layer(middleware::from_fn_with_state(state, guard))
 }
@@ -48,7 +50,17 @@ async fn guard(State(state): State<AppState>, mut request: Request, next: Next) 
         Ok(session) => session,
         Err(error) => return failure(&state, error),
     };
-    let permission = if request.uri().path() == "/admin/publishing" {
+    let path = request.uri().path();
+    let publisher_mutation = unsafe_method
+        && (path == "/admin/sources"
+            || path.starts_with("/admin/sources/")
+            || path == "/admin/feeds"
+            || path.starts_with("/admin/feeds/")
+            || path.starts_with("/admin/jobs/")
+            || path.starts_with("/admin/extractions/")
+            || path.starts_with("/admin/batches/")
+            || (path.starts_with("/admin/articles/") && path.ends_with("/extract")));
+    let permission = if path == "/admin/publishing" || publisher_mutation {
         Permission::Publish
     } else {
         Permission::Edit

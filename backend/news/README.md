@@ -55,7 +55,11 @@ editions/stories/archives from restricted views. Empty archives return 200; miss
 public resources return 404; DB/schema outages return 503. `/recherche` and `/sujets`
 return explicit 501 while their implementation is pending. Admin is disabled by
 default; when explicitly configured, local identity/session/CSRF checks protect
-its dashboard and logout. No publication endpoint or permissive CORS.
+its dashboard and logout. The [pipeline administration interface](../../docs/pipeline-admin.md)
+now provides private source/feed/article/job screens, manual intake and original
+private drafts through the existing services. Publisher operations enqueue or
+authorize work without fetching in HTTP handlers. No publication endpoint or
+permissive CORS.
 See the [HTTP contract](../../docs/http-contract.md) for validation, canonical URLs,
 request IDs, timeout/body limits and what remains in the reader issues.
 

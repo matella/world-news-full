@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Administration · {{ masthead }}</title></head>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><link rel="stylesheet" href="/admin/assets.css"><title>Administration · {{ masthead }}</title></head>
 <body><header><a href="/">{{ masthead }}</a></header><main><h1>Administration</h1>
 <p>Connecté sous {{ username }}.</p>
 {% if publisher %}<p>Rôle : responsable de publication.</p><a href="/admin/publishing">Espace de publication</a>{% else %}<p>Rôle : éditeur.</p>{% endif %}
-<p>Les outils de rédaction et de publication sont encore en préparation.</p>
+<nav aria-label="Administration"><a href="/admin/pipeline">Suivi des sources et traitements</a> · <a href="/admin/sources">Sources</a> · <a href="/admin/articles">Documents et notes</a></nav><p>Les documents sources et brouillons restent privés. Aucun traitement ne publie automatiquement.</p>
 <form action="/admin/logout" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Se déconnecter</button></form>
 </main></body></html>

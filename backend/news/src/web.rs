@@ -38,6 +38,7 @@ struct AppState {
     pool: PgPool,
     request_timeout: Duration,
     auth: Option<Arc<AuthService>>,
+    editor_pool: Option<PgPool>,
 }
 #[derive(Clone)]
 struct QueryValues(BTreeMap<String, String>);
@@ -92,6 +93,11 @@ pub fn router_with_editor(
     pool: PgPool,
     editor_pool: Option<PgPool>,
 ) -> Router {
+    let private_pool = if config.admin_enabled() {
+        editor_pool.clone()
+    } else {
+        None
+    };
     let auth = if config.admin_enabled() {
         editor_pool.map(|pool| Arc::new(AuthService::new(pool, &config.public_url)))
     } else {
@@ -102,6 +108,7 @@ pub fn router_with_editor(
         pool,
         request_timeout: REQUEST_TIMEOUT,
         auth,
+        editor_pool: private_pool,
     };
     let admin_routes = admin::routes(state.clone());
     with_boundary(
@@ -583,7 +590,7 @@ async fn request_boundary(State(state): State<AppState>, request: Request, next:
     headers.insert(
         "content-security-policy",
         HeaderValue::from_static(
-            "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+            "default-src 'none'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
         ),
     );
     if status.is_client_error() || status.is_server_error() || route.starts_with("/admin") {

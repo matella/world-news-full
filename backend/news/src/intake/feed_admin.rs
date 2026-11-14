@@ -13,6 +13,7 @@ pub struct FeedStatus {
     pub paused: bool,
     pub pause_reason: Option<String>,
     pub failure_count: i32,
+    pub last_success_at: Option<DateTime<Utc>>,
     pub retry_after_seconds: Option<String>,
     pub retry_after_observed_at: Option<DateTime<Utc>>,
     pub last_outcome: Option<String>,
@@ -119,7 +120,7 @@ impl FeedAdmin {
     }
 }
 async fn status(tx: &mut Transaction<'_, Postgres>, id: &str) -> Result<FeedStatus, AppError> {
-    sqlx::query_as("SELECT f.id,f.fetch_control_version AS control_version,f.fetch_paused AS paused,f.fetch_pause_reason AS pause_reason,f.failure_count,f.retry_after_seconds,f.retry_after_observed_at,f.last_outcome,f.last_error,f.next_fetch_at,f.last_attempt_id,a.lease_until FROM news.feeds f LEFT JOIN news.feed_fetch_attempts a ON a.id=f.last_attempt_id WHERE f.id=$1").bind(id).fetch_one(&mut **tx).await.map_err(db)
+    sqlx::query_as("SELECT f.id,f.fetch_control_version AS control_version,f.fetch_paused AS paused,f.fetch_pause_reason AS pause_reason,f.failure_count,f.last_success_at,f.retry_after_seconds,f.retry_after_observed_at,f.last_outcome,f.last_error,f.next_fetch_at,f.last_attempt_id,a.lease_until FROM news.feeds f LEFT JOIN news.feed_fetch_attempts a ON a.id=f.last_attempt_id WHERE f.id=$1").bind(id).fetch_one(&mut **tx).await.map_err(db)
 }
 async fn control(
     tx: &mut Transaction<'_, Postgres>,
