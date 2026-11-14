@@ -118,6 +118,12 @@ def main():
             worker_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{worker_database}")
             subprocess.run(["cargo","test","-p","world-news","--locked","--test","worker","--","--ignored","--test-threads=1"],cwd=ROOT,env=worker_env,check=True)
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+worker_database)
+        if (ROOT/"backend/news/tests/threads.rs").is_file():
+            threads_database=database+"_threads"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+threads_database)
+            threads_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{threads_database}")
+            subprocess.run(["cargo","test","-p","world-news","--locked","--test","threads","--","--ignored","--test-threads=1"],cwd=ROOT,env=threads_env,check=True)
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+threads_database)
         if (ROOT/"backend/news/tests/admin_ui.rs").is_file():
             admin_database=database+"_admin_ui"
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+admin_database)

@@ -14,3 +14,5 @@ pub mod web;
 pub mod worker;
 
 pub mod taxonomy;
+
+pub mod threads;

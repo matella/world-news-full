@@ -105,13 +105,19 @@ source implementation and disposable tests continue without production access.
   archive data and legacy provenance. docs/jarvis-handoff.md prepares the staged
   single-writer cutover; live retirement/full edition journey remain gated.
 
-- Taxonomy branch, based on #68: #24 explicit topic/geography policy, deterministic
+- PR #69, based on #68: #24 explicit topic/geography policy, deterministic
   sections, unknown legacy proposals and versioned editorial overrides preserving
   content/citations/provenance/public snapshots. 40 Rust tests, fourteen DB suites,
   real admin classification and transitional science-grouping browser checks passed.
   See docs/evidence/taxonomy.md; edition/search consumers remain #30/#38.
 
-Next: #25 stable threads,
+- Stable thread branch, based on #69: #25 primary subject identities, explicit
+  update instants, deterministic public heads/counts, bounded queries and audited
+  merge/split/undo. Fifteen DB suites include concurrent timeline resolution,
+  reversal, ambiguity-preserving upgrade and private/withdrawn/alias bounds. Editor
+  controls #29, search #38 and reader timelines #39 consume these core services.
+
+Next: #26 article structure, #27 citations and #28 word budgets,
 article/citation/length/editor and edition policy. Independent edition-publication
 acceptance remains gated on #29–#31; service success does not complete those issues
 or authorize a live release.
