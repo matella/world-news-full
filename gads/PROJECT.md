@@ -28,6 +28,8 @@ untrusted data. Do not conflate language, geography, outlet count and reporting 
 | Current Rust skeleton | `cargo build --workspace --locked` |
 | New Rust foundation | `cargo run -p world-news -- --check-config`, `cargo run -p world-news` (DATABASE_URL required; default port 3001) |
 | Rust process smoke test | `python3 scripts/test_rust_runtime.py` after cargo build |
+| Owned schema integration | `python3 scripts/test_database.py` (creates a disposable local DB; regular cargo test deliberately ignores this opt-in suite) |
+| Explicit schema change | `cargo run -p world-news -- --migrate` with authorised migration-owner DATABASE_URL; never run against live data without its release plan |
 | Rust checks | `cargo test --workspace --locked`, `cargo fmt --all -- --check`, `cargo clippy --workspace --locked --all-targets -- -D warnings` |
 | Persistence drill | `python3 scripts/test_persistence.py` (disposable Docker only) |
 | Frontend integration | `python3 scripts/test_frontend.py` after build; optional `WORLDNEWS_BROWSER_CHECK=1` uses installed Playwright/Chromium |

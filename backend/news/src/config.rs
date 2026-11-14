@@ -96,7 +96,11 @@ impl Config {
     }
 
     pub(crate) fn database_options(&self) -> PgConnectOptions {
-        self.database.clone()
+        self.database.clone().options([
+            ("search_path", "news,pg_catalog"),
+            ("statement_timeout", "5000"),
+            ("lock_timeout", "3000"),
+        ])
     }
 }
 
