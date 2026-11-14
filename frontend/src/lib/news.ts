@@ -1,4 +1,4 @@
-// Shared data + theme for the World News site. Reads the site's OWN Postgres (published by Jarvis).
+// Transitional archive reader: reads only the site-owned published-story database.
 import { query } from "./database";
 
 export type Claim = { claim: string; sources: number[] };
@@ -163,32 +163,6 @@ export async function editionDates(): Promise<{ date: string; count: number }[]>
   return rows as { date: string; count: number }[];
 }
 
-export type Status = {
-  stats: {
-    articles?: number;
-    pending?: number;
-    stories?: number;
-    multi_source?: number;
-    synthesized?: number;
-    awaiting_synthesis?: number;
-    translated?: number;
-    awaiting_translation?: number;
-    default_lang?: string;
-    process_eta_min?: number;
-    synth_eta_min?: number;
-    by_lang?: Record<string, number>;
-    last_ingest?: string | null;
-  };
-  updated_at: string;
-};
-
-export async function getStatus(): Promise<Status | null> {
-  const { rows } = await query("getStatus",
-    "SELECT stats, updated_at FROM news_status WHERE id = 1"
-  );
-  return (rows[0] as Status) ?? null;
-}
-
 export async function getAdminStories(): Promise<Story[]> {
   const { rows } = await query("getAdminStories",
     `SELECT ${COLS} FROM published_stories ORDER BY updated_at DESC LIMIT 200`
@@ -205,8 +179,8 @@ export async function getStory(id: string): Promise<Story | null> {
 }
 
 export function byline(s: Story) {
-  const n = s.origin_count || 1;
-  return `Synthèse · ${n} source${n === 1 ? "" : "s"}`;
+  const n = s.source_count;
+  return `Références déclarées · ${n}`;
 }
 
 // "lundi 8 juin 2026" from a YYYY-MM-DD edition date (noon avoids a TZ off-by-one).
@@ -214,12 +188,6 @@ export function frDate(date: string) {
   return new Intl.DateTimeFormat("fr-BE", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   }).format(new Date(date + "T12:00:00"));
-}
-
-// A deep-link into the Jarvis console, pre-loaded to deep-dive this story.
-export function jarvisAskUrl(title: string) {
-  const base = process.env.NEXT_PUBLIC_JARVIS_URL || "http://192.168.129.85:8092";
-  return `${base}/?ask=${encodeURIComponent(`Fais-moi une analyse approfondie de cette actualité : ${title}`)}`;
 }
 
 // ── Theme parameters ──

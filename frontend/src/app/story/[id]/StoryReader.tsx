@@ -6,8 +6,8 @@ import { useState } from "react";
 import type { Disagreement, Source } from "../../../lib/news";
 
 export default function StoryReader({
-  titleFr, bodyFr, titleOrig, bodyOrig, lang, synthesized, originCount, sourceCount,
-  sources, disagreements, disagreementsFr, askUrl,
+  titleFr, bodyFr, titleOrig, bodyOrig, lang, synthesized, sourceCount,
+  sources, disagreements, disagreementsFr,
 }: {
   titleFr: string;
   bodyFr: string;
@@ -15,12 +15,10 @@ export default function StoryReader({
   bodyOrig: string;
   lang: string;
   synthesized: boolean;
-  originCount: number;
   sourceCount: number;
   sources: Source[];
   disagreements: Disagreement[];
   disagreementsFr: Disagreement[];
-  askUrl: string;
 }) {
   const hasOriginal = lang !== "fr" && (bodyOrig !== bodyFr || titleOrig !== titleFr);
   const [orig, setOrig] = useState(false);
@@ -33,10 +31,7 @@ export default function StoryReader({
     <>
       <h1>{title}</h1>
       <div className="byline">
-        <span>Synthèse · ◆ {originCount} {originCount === 1 ? "source" : "sources"}{sourceCount > originCount ? ` (${sourceCount} reprises)` : ""}</span>
-        <a className="askbtn" href={askUrl} target="_blank" rel="noreferrer">
-          Analyse complète par Jarvis ↗
-        </a>
+        <span>Références déclarées · {sourceCount}</span>
       </div>
 
       {hasOriginal && (
@@ -52,13 +47,13 @@ export default function StoryReader({
           <div className="summary">{body}</div>
           {sourceCount > 1 && (
             <p className="pending">
-              ◐ {originCount} sources couvrent ce sujet — une synthèse complète est en cours de
-              rédaction et apparaîtra ici sous peu.
+              Résumé disponible avec {sourceCount} références déclarées.
+              Consultez les publications originales pour leurs détails.
             </p>
           )}
         </>
       ) : (
-        <p className="pending">◐ Cet article est en cours de traitement — son résumé arrive.</p>
+        <p className="pending">Aucun texte n’est disponible dans cette publication.</p>
       )}
 
       {(() => {

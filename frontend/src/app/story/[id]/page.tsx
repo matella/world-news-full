@@ -1,7 +1,7 @@
 // A single story — the "deep dive" page: French synthesis by default (toggle to the original),
-// where sources disagree, links out to each outlet, and a shortcut to Jarvis. Reads the site's DB.
+// recorded disagreements and links to original outlets. Reads only the site-owned DB.
 import {
-  getStory, getThread, jarvisAskUrl, resolveTheme, rootVars, dispTitle, dispBody, frDate,
+  getStory, getThread, resolveTheme, rootVars, dispTitle, dispBody, frDate,
 } from "../../../lib/news";
 import StoryReader from "./StoryReader";
 import { notFound } from "next/navigation";
@@ -19,8 +19,6 @@ a{color:inherit;}
 .kicker{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:18px 0 8px;}
 h1{font-size:clamp(28px,6vw,38px);line-height:1.08;font-weight:700;margin:0 0 12px;text-wrap:balance;}
 .byline{font-size:12px;color:var(--muted);border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:10px 0;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
-.askbtn{display:inline-block;background:var(--accent);color:#fff;border-radius:3px;padding:8px 14px;font-size:12.5px;font-weight:700;text-decoration:none;}
-.askbtn:hover{opacity:.9;}
 .toggle{display:inline-block;background:none;border:1px solid var(--rule);color:var(--muted);border-radius:3px;padding:5px 11px;font-size:11.5px;font-family:inherit;cursor:pointer;margin-bottom:18px;}
 .toggle:hover{border-color:var(--accent);color:var(--accent);}
 .body{font-size:16px;line-height:1.72;text-align:justify;hyphens:auto;}
@@ -85,12 +83,10 @@ export default async function StoryPage({
               bodyOrig={s.body}
               lang={s.lang}
               synthesized={s.synthesized}
-              originCount={s.origin_count}
               sourceCount={s.source_count}
               sources={s.sources}
               disagreements={s.disagreements_json}
               disagreementsFr={s.disagreements_fr}
-              askUrl={jarvisAskUrl(dispTitle(s))}
             />
 
             {thread.length > 1 && (
@@ -110,10 +106,9 @@ export default async function StoryPage({
             )}
 
             <div className="colophon">
-              {s.synthesized
-                ? `Synthèse réalisée par Jarvis à partir de ${s.origin_count} ${s.origin_count === 1 ? "source" : "sources"}.`
-                : `Résumé réalisé par Jarvis à partir de ${s.source_count} ${s.source_count === 1 ? "dépêche" : "dépêches"}.`}
-              {" "}Pour aller plus loin — contexte, historique, enjeux — demandez à Jarvis.
+              Publication du système historique. Le texte et les références sont
+              présentés d’après les données enregistrées ; ils ne constituent pas
+              une nouvelle vérification par la rédaction.
             </div>
           </>
         )}

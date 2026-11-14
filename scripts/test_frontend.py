@@ -36,6 +36,8 @@ def main():
             raise RuntimeError("Disposable database did not start")
         run("exec", "-i", container, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1",
             input=(ROOT / "fixtures/legacy-test-schema.sql").read_bytes())
+        # The transitional reader/admin must not require an external publisher's status table.
+        run("exec", container, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", "DROP TABLE news_status")
         db_port = run("port", container, "5432").decode().strip().rsplit(":", 1)[1]
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
@@ -73,10 +75,43 @@ def main():
             status, _, headers = request("/admin")
             assert status == 401 and "Basic" in headers["WWW-Authenticate"]
             auth = "Basic " + base64.b64encode(b"fixture-editor:synthetic-admin-only").decode()
-            assert request("/admin", {"Authorization": auth})[0] == 200
+            admin_status, admin_body, _ = request("/admin", {"Authorization": auth})
+            assert admin_status == 200 and "200 publications récentes" in admin_body
+            assert "Processing queue" not in admin_body and "Awaiting synthesis" not in admin_body
             run("exec", container, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c",
-                "INSERT INTO published_stories(id,title,body,lang,origin_count,source_count,edition_date) VALUES ('fixture-story','Synthetic headline','Synthetic body','fr',1,1,'2026-01-10')")
-            assert "Synthetic headline" in request("/story/fixture-story")[1]
+                "INSERT INTO published_stories(id,title,body,lang,origin_count,source_count,edition_date) VALUES ('fixture-story','Synthetic headline','Synthetic body. Attribution historique : Jarvis.','fr',1,1,'2026-01-10')")
+            for path in ["/", "/edition/2026-01-10", "/story/fixture-story"]:
+                code, html, _ = request(path)
+                assert code == 200 and "Synthetic headline" in html
+                assert "192.168.129.85" not in html and "/?ask=" not in html
+                assert "Analyse complète par Jarvis" not in html
+                if path == "/story/fixture-story":
+                    assert "Synthetic body. Attribution historique : Jarvis." in html
+            if os.environ.get("WORLDNEWS_BROWSER_CHECK") == "1":
+                from playwright.sync_api import sync_playwright
+                with sync_playwright() as playwright:
+                    browser = playwright.chromium.launch(headless=True, executable_path=shutil.which("chromium"), args=["--no-sandbox"])
+                    context = browser.new_context()
+                    external = []
+                    def guard(route):
+                        if route.request.url.startswith(base + "/"):
+                            route.continue_()
+                        else:
+                            external.append(route.request.url)
+                            route.abort()
+                    context.route("**/*", guard)
+                    try:
+                        page = context.new_page()
+                        for path in ["/", "/edition/2026-01-10", "/story/fixture-story"]:
+                            page.goto(base + path, wait_until="networkidle")
+                            page.get_by_role("heading", name="Synthetic headline", exact=True).wait_for()
+                            links = page.locator("a").evaluate_all("nodes => nodes.map(node => node.href)")
+                            assert all("/?ask=" not in link and "192.168.129.85" not in link for link in links)
+                            assert page.get_by_role("link", name="Analyse complète par Jarvis ↗", exact=True).count() == 0
+                        assert all(url.startswith("https://fonts.googleapis.com/") for url in external), external
+                        print("PASS: Chromium live/archive/story navigation without publisher links or requests; external requests blocked")
+                    finally:
+                        browser.close()
             run("stop", container)
             status, body, _ = request("/")
             # Next streaming can commit 200 before failure; Rust will own strict 503 semantics.
@@ -85,7 +120,7 @@ def main():
             if os.environ.get("WORLDNEWS_BROWSER_CHECK") == "1":
                 from playwright.sync_api import sync_playwright
                 with sync_playwright() as playwright:
-                    browser = playwright.chromium.launch(headless=True, executable_path=shutil.which("chromium"))
+                    browser = playwright.chromium.launch(headless=True, executable_path=shutil.which("chromium"), args=["--no-sandbox"])
                     try:
                         page = browser.new_page(viewport={"width": 390, "height": 844})
                         page.goto(base + "/", wait_until="networkidle")
