@@ -21,6 +21,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo build --workspace --locked
+      - run: python3 scripts/test_rust_runtime.py
   frontend:
     runs-on: ubuntu-latest
     env:

@@ -14,6 +14,8 @@
 > disable unconfigured admin access. Read the
 > [configuration/storage runbook](docs/operations/transitional-safety.md)
 > before running Compose or considering an existing-host upgrade.
+> The [Rust application foundation](backend/news/README.md) now runs separately
+> on port 3001. It is not yet a replacement publishing/reader application.
 
 This repository contains a local development skeleton for the World News project.
 It runs entirely locally and anonymously (no authentication) and is intended for

@@ -3,6 +3,7 @@ members = [
     "backend/api-gateway",
     "backend/scraper",
     "backend/ai-service",
+    "backend/news",
 ]
 
 # Use the edition 2024 resolver which is required for workspace members on
