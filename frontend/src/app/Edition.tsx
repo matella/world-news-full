@@ -1,7 +1,7 @@
 // One newspaper edition (a single day). Rendered by both the front page (latest, live) and every
 // archived day at /edition/[date]. Pure presentation — takes the day's stories + page-turn links.
 import {
-  byline, jarvisAskUrl, rootVars, frDate, dispTitle, dispBody, Story,
+  byline, rootVars, frDate, dispTitle, dispBody, Story,
 } from "../lib/news";
 
 const CSS = `
@@ -26,8 +26,6 @@ a{color:inherit;text-decoration:none;}
 .lead .body{font-size:14.5px;line-height:1.64;text-align:justify;hyphens:auto;column-gap:30px;column-count:2;}
 .lead .body::first-letter{float:left;font-size:54px;line-height:.76;font-weight:700;padding:5px 9px 0 0;}
 .byline{font-size:11px;color:var(--muted);border-top:1px solid var(--hair);padding-top:7px;margin-top:13px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;}
-.ask{color:var(--accent);font-size:11px;white-space:nowrap;}
-.ask:hover{text-decoration:underline;}
 .sections{columns:3;column-gap:30px;column-rule:1px solid var(--rule);}
 .section{break-inside:avoid;margin:0 0 22px;}
 .sechead{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;border-bottom:2px solid var(--ink);padding-bottom:4px;margin-bottom:calc(12px*var(--s));}
@@ -69,7 +67,6 @@ function Item({ s }: { s: Story }) {
       {body && <p className="snip">{snippet(body)}</p>}
       <div className="meta">
         <span>{byline(s)}</span>
-        <a className="ask" href={jarvisAskUrl(dispTitle(s))} target="_blank" rel="noreferrer">Jarvis ↗</a>
       </div>
     </article>
   );
@@ -100,7 +97,7 @@ export default function Edition({
             <span>Liège</span>
           </div>
           <div className="title">{t.masthead}</div>
-          <div className="motto">Synthèse de dix sources · monde &amp; Belgique · indépendant</div>
+          <div className="motto">Le journal · monde &amp; Belgique</div>
         </header>
 
         <nav className="pageturn">
@@ -119,8 +116,7 @@ export default function Edition({
             <h1><a href={`/story/${lead.id}`}>{dispTitle(lead)}</a></h1>
             {dispBody(lead) && <div className="body">{snippet(dispBody(lead), 540)}</div>}
             <div className="byline">
-              <span>{byline(lead)} · ◆ {lead.origin_count}</span>
-              <a className="ask" href={jarvisAskUrl(dispTitle(lead))} target="_blank" rel="noreferrer">Analyse complète par Jarvis ↗</a>
+              <span>{byline(lead)}</span>
             </div>
           </section>
         )}
@@ -136,7 +132,7 @@ export default function Edition({
 
         <div className="colophon">
           {isLatest
-            ? "Voilà l’édition du jour. Touchez un article, ou demandez l’analyse à Jarvis."
+            ? "Ouvrez un article pour lire son texte et consulter les liens sources."
             : "Édition archivée. Tournez la page, ou parcourez toutes les éditions."}
         </div>
       </div>

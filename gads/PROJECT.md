@@ -59,6 +59,12 @@ pause/configuration actions never execute source HTTP or publish. Source text st
 removal requires a concrete versioned confirmation; manual notes/original drafts
 remain distinct from retained publisher text. Do not widen public reader authority.
 
+Reader Jarvis decoupling does not authorize a live writer stop. Preserve historical
+legacy_jarvis provenance and article data; never relabel it as newly team-authored.
+Follow docs/jarvis-handoff.md for inventory, exact release artifacts, authorization,
+final reconciliation and single-writer/rollback gates. Independent edition-publication
+acceptance remains blocked on its editorial/edition policies, not hyperlink removal.
+
 ## Commands and evidence
 
 | Purpose | Command from repository root |

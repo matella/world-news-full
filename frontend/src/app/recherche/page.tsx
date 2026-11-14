@@ -1,5 +1,5 @@
 import Link from "next/link";
-// Recherche plein-texte dans toutes les éditions (français). Indépendant de Jarvis : tsvector
+// Recherche plein-texte dans toutes les éditions (français). Lecture locale : tsvector
 // sur la DB du site — pas d'embeddings nécessaires.
 import { searchStories, resolveTheme, rootVars, frDate, dispTitle, dispBody } from "../../lib/news";
 
