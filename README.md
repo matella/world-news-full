@@ -1,5 +1,16 @@
 # World News — Local Skeleton (Anonymous Mode)
 
+> Migration in progress: the implemented site is Next.js reading Postgres,
+> populated by an external publisher. The Rust services below are independent
+> mocks, and current Compose starts only Postgres + frontend. See the
+> [actual architecture](docs/architecture/current-state.md),
+> [Rust decision](docs/architecture/0001-rust-publishing.md),
+> [editorial policy](docs/editorial-policy.md), and
+> [execution record](docs/implementation-plan.md).
+> Coding agents must read [AGENTS.md](AGENTS.md) and
+> [project rules](gads/PROJECT.md). [GADS adoption](docs/gads-adoption.md)
+> is pinned and checked independently of application tests.
+
 This repository contains a local development skeleton for the World News project.
 It runs entirely locally and anonymously (no authentication) and is intended for
 development and environment verification.

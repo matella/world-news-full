@@ -1,0 +1,34 @@
+name: Foundation and GADS
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check installed policies and fixtures offline
+        run: python3 scripts/check_foundation.py
+      - name: Checkout reviewed upstream GADS
+        uses: actions/checkout@v4
+        with:
+          repository: matella/global-ai-development-standard
+          ref: ad6f6fb5e6bb2afd2b1168df64510f77f61b8ea7
+          path: work/gads-source
+          persist-credentials: false
+      - name: Verify upstream integrity and adoption
+        run: |
+          python3 work/gads-source/scripts/verify_manifest.py
+          python3 work/gads-source/scripts/repo_audit.py .
+          python3 -m unittest discover -s work/gads-source/tests -v
