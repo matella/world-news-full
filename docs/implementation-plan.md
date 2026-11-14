@@ -20,15 +20,19 @@ Never mark 48 issues complete because a scaffold exists. Optional AI remains off
 Current production schema, exposure, storage and publisher are unverified. Local
 source implementation and disposable tests continue without production access.
 
-## Current staged work
+## Implementation history (all PRs #50–#71 merged)
 
 - PR #50: baseline, GADS, ADR and editorial settings (#2/#3/#4/#9).
-  Foundation CI passed. #3 still lacks live Claude Code runtime validation.
+  Foundation CI passed; the available Codex task smoke and unavailable Claude CLI
+  are documented in docs/gads-adoption.md. No Claude runtime certification is claimed.
 - PR #51, based on #50: current-app safety/build/persistence (#5–#8).
   Local and CI verification passed; production/PVC/real-role steps remain unverified.
 - PR #52, based on #51: #10, typed config/policy, bounded pool,
   escaped preparation template, health endpoints and real-process smoke test.
-- No PR is merged, no issue is closed prematurely, and no live deployment occurred.
+- Integration update: PR #72 retired both push-deployment workflows, then #50–#71
+  merged in dependency order under the owner's explicit merge instruction. The
+  integration head is 565cf47597a51ac16be3d28bd5c035bdb5a5bb7a. No live deployment
+  occurred. Completed issues are closed; partial acceptance remains tracked.
 
 - PR #53, based on #52: #11 owned schema, embedded migrations and restricted public
   views. Local disposable-DB verification and GitHub CI passed.
@@ -117,7 +121,7 @@ source implementation and disposable tests continue without production access.
   reversal, ambiguity-preserving upgrade and private/withdrawn/alias bounds. Editor
   controls #29, search #38 and reader timelines #39 consume these core services.
 
-- Structured article branch, based on #70: #26 explicit overview/full-body fields,
+- PR #71, based on #70: #26 explicit overview/full-body fields,
   plain claim/context/uncertainty blocks, bounded unique anchors and shared escaped
   public/private rendering. 43 Rust tests, sixteen DB suites and three Chromium
   workflows passed. No inferred legacy sections or rewritten prose. Citation/length
@@ -127,3 +131,19 @@ Next: #27 citations and #28 word budgets,
 article/citation/length/editor and edition policy. Independent edition-publication
 acceptance remains gated on #29–#31; service success does not complete those issues
 or authorize a live release.
+
+## Integration and closure audit — 2026-11-14
+
+The historical base references above describe implementation order, not current
+open PRs. All #50–#71 were retargeted to main and merged with their CI-tested
+source SHAs after #72 isolated code integration from deployment. Deployment-policy
+run 43604828727 passed. No queued/running legacy deployment job was found before
+the merges; post-merge active jobs were hosted Application checks, not deployment.
+
+Roadmap #1 checkboxes are reconciled with issue completion. Keep #5 open for real
+storage validation, #19 for article-origin follow-through, #23 for independent
+edition handoff, and #24 for remaining consumers. #27 onward requires its own
+acceptance evidence. The GADS issue permits explicit reporting of unavailable
+runtimes; a missing Claude CLI is a documented compatibility limit, not a claim
+that the installed hook ran. No live Jarvis, data, account, volume or traffic
+change occurred. See docs/operations/code-integration.md for release boundaries.

@@ -132,8 +132,13 @@ agent instruction discovery/enforcement. See `docs/gads-adoption.md`.
 
 The owner requested execution of roadmap #1. Scoped source edits, dependencies,
 local tests, commits, feature-branch pushes, PRs and issue progress updates are in
-scope. Do not push to main: its current workflows deploy on push. Do not merge
-until a concrete release effect is understood and authorised. Do not stop a live
+scope. The owner explicitly authorised merging validated PRs and progressively
+closing completed issues. PR #72 retired both push-deployment workflows before
+#50–#71 merged; see docs/operations/code-integration.md. Merge scoped PRs into main
+with passing relevant checks and expected head SHAs, then close only completed
+acceptance criteria. Source integration does not authorise a live release. Keep
+the manual release hold until #46–#49 and concrete environment approval are met.
+Do not stop a live
 Jarvis writer, switch traffic, deploy, publish packages/images, modify live secrets,
 copy production records, incur provider costs or delete production data without
 explicit action/environment-specific authorisation. Prepare and verify locally
