@@ -24,6 +24,7 @@ bounded pool after draining HTTP work. No Node, Jarvis or AI provider is needed.
 | `PUBLIC_URL` | Origin only, defaults `http://localhost:3001`; production requires explicit HTTPS origin. No credentials/path/query/fragment. |
 | `BIND_ADDR` | IP:port, defaults loopback port 3001. |
 | `NEWS_MASTHEAD` | 1–120 characters, template-escaped; defaults The World Brief. |
+| `NEWS_TAXONOMY_CONFIG` | Optional strict UTF-8 JSON policy up to 64 KiB; otherwise repository config/taxonomy.json. See docs/taxonomy.md. |
 | `NEWS_EDITORIAL_CONFIG` | Optional JSON file path; otherwise compiles repository `config/editorial.json` as the default. |
 | `NEWS_ADMIN_ENABLED` | `false` by default; `true` requires an explicit admin runtime connection and safe public origin. |
 | `EDITOR_DATABASE_URL` | Private admin-runtime credential for the same DB target; no runtime schema/account ownership. |

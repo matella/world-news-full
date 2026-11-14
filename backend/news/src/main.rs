@@ -26,7 +26,12 @@ async fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
             return Err("Usage: world-news --import-legacy FILE [--dry-run | --apply]".into());
         }
         let policy = Config::editorial_from_env().map_err(std::io::Error::other)?;
-        let plan = legacy::plan_file(Path::new(&arguments[1]), &policy.publication_timezone)?;
+        let taxonomy = Config::taxonomy_from_env().map_err(std::io::Error::other)?;
+        let plan = legacy::plan_file_with_taxonomy(
+            Path::new(&arguments[1]),
+            &policy.publication_timezone,
+            &taxonomy,
+        )?;
         let report = if arguments.get(2).is_some_and(|arg| arg == "--apply") {
             let config = Config::from_env().map_err(std::io::Error::other)?;
             let pool = persistence::pool(&config);

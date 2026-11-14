@@ -1,4 +1,4 @@
-use crate::domain::EditorialPolicy;
+use crate::{domain::EditorialPolicy, taxonomy::Taxonomy};
 use sqlx::{
     ConnectOptions,
     postgres::{PgConnectOptions, PgSslMode},
@@ -11,6 +11,7 @@ pub struct Config {
     pub public_url: Url,
     pub masthead: String,
     pub editorial: EditorialPolicy,
+    pub taxonomy: Taxonomy,
     database: PgConnectOptions,
     editor_database: Option<PgConnectOptions>,
 }
@@ -40,6 +41,27 @@ impl Config {
             None => include_str!("../../../config/editorial.json").to_owned(),
         };
         EditorialPolicy::parse(&text)
+    }
+    pub fn taxonomy_from_env() -> Result<Taxonomy, &'static str> {
+        Self::taxonomy_from_lookup(|key| std::env::var(key).ok())
+    }
+    fn taxonomy_from_lookup(
+        get: impl Fn(&str) -> Option<String>,
+    ) -> Result<Taxonomy, &'static str> {
+        use std::io::Read;
+        match get("NEWS_TAXONOMY_CONFIG") {
+            None => Ok(Taxonomy::repository()),
+            Some(path) => {
+                let mut bytes = Vec::new();
+                std::fs::File::open(path)
+                    .map_err(|_| "Cannot read NEWS_TAXONOMY_CONFIG")?
+                    .take(65537)
+                    .read_to_end(&mut bytes)
+                    .map_err(|_| "Cannot read NEWS_TAXONOMY_CONFIG")?;
+                let text = std::str::from_utf8(&bytes).map_err(|_| "Invalid taxonomy encoding")?;
+                Taxonomy::parse(text)
+            }
+        }
     }
     pub fn from_env() -> Result<Self, &'static str> {
         Self::from_lookup(|key| std::env::var(key).ok())
@@ -110,6 +132,7 @@ impl Config {
             public_url,
             masthead,
             editorial,
+            taxonomy: Self::taxonomy_from_lookup(&get)?,
             database: database.disable_statement_logging(),
             editor_database,
         })
@@ -302,6 +325,40 @@ mod tests {
                 ("BIND_ADDR", "bad")
             ])
             .is_err()
+        );
+    }
+}
+
+#[cfg(test)]
+mod taxonomy_tests {
+    use super::*;
+    #[test]
+    fn taxonomy_file_override_is_bounded_and_errors_redact_paths() {
+        let path = std::env::temp_dir().join(format!(
+            "worldnews-taxonomy-{}-config.json",
+            std::process::id()
+        ));
+        let mut policy = Taxonomy::repository();
+        policy.sections.swap(0, 2);
+        std::fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        let get = |key: &str| match key {
+            "DATABASE_URL" => Some("postgres://fixture:synthetic@127.0.0.1/news".into()),
+            "NEWS_TAXONOMY_CONFIG" => Some(path.to_str().unwrap().into()),
+            _ => None,
+        };
+        assert_eq!(
+            Config::from_lookup(get).unwrap().taxonomy.fingerprint(),
+            policy.fingerprint()
+        );
+        std::fs::write(&path, " ".repeat(65537)).unwrap();
+        assert_eq!(
+            Config::from_lookup(get).unwrap_err(),
+            "Taxonomy exceeds 64 KiB"
+        );
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(
+            Config::from_lookup(get).unwrap_err(),
+            "Cannot read NEWS_TAXONOMY_CONFIG"
         );
     }
 }

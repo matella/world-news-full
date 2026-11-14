@@ -29,6 +29,10 @@ def main():
         for target in re.findall(r"`(gads/[^`\s]+\.md)`", text):
             require((ROOT / target).is_file(), f"Broken policy reference: {target}")
 
+    taxonomy = ROOT / "config/taxonomy.json"
+    require(taxonomy.is_file(), "Missing taxonomy policy")
+    require(taxonomy.read_bytes() == (ROOT / "frontend/src/lib/taxonomy.generated.json").read_bytes(),
+            "Transitional taxonomy snapshot drift: copy config/taxonomy.json to frontend/src/lib/taxonomy.generated.json")
     policy = json.loads((ROOT / "config/editorial.json").read_text())
     require(policy["version"] == 1, "Unsupported editorial config version")
     require(policy["publication_mode"] == "manual", "Automatic publication is not approved")

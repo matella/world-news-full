@@ -25,6 +25,8 @@ pub struct Mapping {
     pub id: String,
     pub revision_id: String,
     pub disposition: &'static str,
+    pub language: String,
+    pub proposed_classification: crate::taxonomy::Projection,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportReport {
@@ -32,6 +34,7 @@ pub struct ImportReport {
     pub database_checked: bool,
     pub input_hash: String,
     pub publication_timezone: String,
+    pub taxonomy_policy_hash: String,
     pub input_rows: usize,
     pub validated_rows: usize,
     pub duplicates: usize,
@@ -45,6 +48,7 @@ pub struct ImportReport {
 pub struct ImportPlan {
     pub report: ImportReport,
     stories: Vec<PlannedStory>,
+    taxonomy: crate::taxonomy::Taxonomy,
 }
 struct PlannedStory {
     row: usize,
@@ -170,16 +174,30 @@ fn array<'a>(row: &'a Value, key: &str) -> Result<&'a [Value], &'static str> {
 }
 
 pub fn plan_file(path: &Path, timezone: &str) -> Result<ImportPlan, AppError> {
+    plan_file_with_taxonomy(path, timezone, &crate::taxonomy::Taxonomy::repository())
+}
+pub fn plan_file_with_taxonomy(
+    path: &Path,
+    timezone: &str,
+    taxonomy: &crate::taxonomy::Taxonomy,
+) -> Result<ImportPlan, AppError> {
     let file = std::fs::File::open(path)
         .map_err(|_| AppError::Validation("Cannot read legacy export."))?;
     let mut bytes = Vec::new();
     file.take(MAX_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| AppError::Validation("Cannot read legacy export."))?;
-    plan_bytes(&bytes, timezone)
+    plan_bytes_with_taxonomy(&bytes, timezone, taxonomy)
 }
 
 pub fn plan_bytes(bytes: &[u8], timezone: &str) -> Result<ImportPlan, AppError> {
+    plan_bytes_with_taxonomy(bytes, timezone, &crate::taxonomy::Taxonomy::repository())
+}
+pub fn plan_bytes_with_taxonomy(
+    bytes: &[u8],
+    timezone: &str,
+    taxonomy: &crate::taxonomy::Taxonomy,
+) -> Result<ImportPlan, AppError> {
     if bytes.len() as u64 > MAX_BYTES {
         return Err(AppError::Validation(
             "Legacy export exceeds 32 MiB; split by complete editions.",
@@ -208,6 +226,7 @@ pub fn plan_bytes(bytes: &[u8], timezone: &str) -> Result<ImportPlan, AppError> 
         database_checked: false,
         input_hash: hash(&root),
         publication_timezone: timezone.into(),
+        taxonomy_policy_hash: taxonomy.fingerprint(),
         input_rows: rows.len(),
         validated_rows: 0,
         duplicates: 0,
@@ -316,10 +335,16 @@ pub fn plan_bytes(bytes: &[u8], timezone: &str) -> Result<ImportPlan, AppError> 
             id: story.id.clone(),
             revision_id: story.revision_id.clone(),
             disposition: "planned",
+            language: story.language.clone(),
+            proposed_classification: taxonomy.project(&story.topics, &[]),
         });
     }
     report.validated_rows = stories.len();
-    Ok(ImportPlan { report, stories })
+    Ok(ImportPlan {
+        report,
+        stories,
+        taxonomy: taxonomy.clone(),
+    })
 }
 
 fn parse_row(
@@ -579,6 +604,8 @@ pub async fn apply(pool: &PgPool, plan: &ImportPlan) -> Result<ImportReport, App
                 id,
                 revision_id,
                 disposition: "already_imported",
+                language: story.language.clone(),
+                proposed_classification: plan.taxonomy.project(&story.topics, &[]),
             });
             continue;
         }
@@ -643,6 +670,8 @@ pub async fn apply(pool: &PgPool, plan: &ImportPlan) -> Result<ImportReport, App
             id: story.id.clone(),
             revision_id: story.revision_id.clone(),
             disposition: "inserted",
+            language: story.language.clone(),
+            proposed_classification: plan.taxonomy.project(&story.topics, &[]),
         });
     }
     let mut editions: BTreeMap<NaiveDate, Vec<&PlannedStory>> = BTreeMap::new();

@@ -31,6 +31,18 @@ async fn legacy_import_is_atomic_idempotent_and_preserves_history() {
     let fixture = include_bytes!("../../../fixtures/legacy-stories.json");
     let plan = legacy::plan_bytes(fixture, "Europe/Brussels").unwrap();
     assert_eq!(plan.report.validated_rows, 3);
+    assert_eq!(
+        plan.report.taxonomy_policy_hash,
+        world_news::taxonomy::Taxonomy::repository().fingerprint()
+    );
+    assert!(
+        plan.report
+            .mappings
+            .iter()
+            .all(|m| m.proposed_classification.unknown_geography
+                && m.proposed_classification.geography.is_empty())
+    );
+    assert!(plan.report.mappings.iter().any(|m| m.language == "fr"));
     assert_eq!(count(&pool, "stories").await, 0);
 
     sqlx::raw_sql("CREATE FUNCTION news.test_reject_import() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.story_id='legacy-b' THEN RAISE EXCEPTION 'synthetic interruption' USING ERRCODE='23514'; END IF; RETURN NEW; END $$;

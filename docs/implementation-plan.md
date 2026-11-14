@@ -100,12 +100,18 @@ source implementation and disposable tests continue without production access.
   Chromium source/feed/intake/draft/mobile checks passed; source storage removal
   requires explicit versioned confirmation. See docs/evidence/pipeline-admin.md.
 
-- Jarvis reader decoupling branch, based on #67: removes console links/configuration
+- PR #68, based on #67: removes console links/configuration
   and the transitional admin's publisher status/ETA dependency while preserving
   archive data and legacy provenance. docs/jarvis-handoff.md prepares the staged
   single-writer cutover; live retirement/full edition journey remain gated.
 
-Next: #24 taxonomy, then #25 stable threads,
+- Taxonomy branch, based on #68: #24 explicit topic/geography policy, deterministic
+  sections, unknown legacy proposals and versioned editorial overrides preserving
+  content/citations/provenance/public snapshots. 40 Rust tests, fourteen DB suites,
+  real admin classification and transitional science-grouping browser checks passed.
+  See docs/evidence/taxonomy.md; edition/search consumers remain #30/#38.
+
+Next: #25 stable threads,
 article/citation/length/editor and edition policy. Independent edition-publication
 acceptance remains gated on #29–#31; service success does not complete those issues
 or authorize a live release.

@@ -4,6 +4,8 @@ import {
   byline, rootVars, frDate, dispTitle, dispBody, Story,
 } from "../lib/news";
 
+import { legacySection, sections } from "../lib/classification";
+
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap');
 *{box-sizing:border-box;}
@@ -44,19 +46,10 @@ function snippet(body: string, n = 150) {
 }
 
 function sectionsOf(stories: Story[]) {
-  const sport = stories.filter((s) => s.topic === "sport");
-  const used = new Set(sport.map((s) => s.id));
-  const take = (pred: (s: Story) => boolean) =>
-    stories.filter((s) => !used.has(s.id) && pred(s)).map((s) => (used.add(s.id), s));
-  const belgique = take((s) => s.lang !== "en");
-  const techbiz = take((s) => ["tech", "finance", "science"].includes(s.topic));
-  const monde = take(() => true);
-  return [
-    { title: "Monde", items: monde.slice(0, 6) },
-    { title: "Belgique", items: belgique.slice(0, 6) },
-    { title: "Tech & Éco", items: techbiz.slice(0, 5) },
-    { title: "Sport", items: sport.slice(0, 4) },
-  ].filter((s) => s.items.length);
+  const grouped = new Map(sections.map((section) => [section.id, [] as Story[]]));
+  for (const story of stories) grouped.get(legacySection(story.topic).id)!.push(story);
+  return sections.map((section) => ({title: section.label, items: grouped.get(section.id)!}))
+    .filter((section) => section.items.length);
 }
 
 function Item({ s }: { s: Story }) {

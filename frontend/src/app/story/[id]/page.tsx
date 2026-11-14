@@ -4,6 +4,7 @@ import {
   getStory, getThread, resolveTheme, rootVars, dispTitle, dispBody, frDate,
 } from "../../../lib/news";
 import StoryReader from "./StoryReader";
+import { legacySection } from "../../../lib/classification";
 import { notFound } from "next/navigation";
 import { validStoryId } from "../../../lib/validation";
 
@@ -75,7 +76,7 @@ export default async function StoryPage({
         {!s && <p style={{ marginTop: 30, color: t.p.muted }}>Cet article ne fait plus partie de l’édition en cours.</p>}
         {s && (
           <>
-            <div className="kicker">{s.topic || (s.lang !== "en" ? "Belgique" : "Monde")}</div>
+            <div className="kicker">{legacySection(s.topic).label}</div>
             <StoryReader
               titleFr={dispTitle(s)}
               bodyFr={dispBody(s)}
