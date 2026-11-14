@@ -167,3 +167,13 @@ revision-bound public exception reasons, current-policy publication checks, priv
 counter/form and honest reader estimates. See docs/article-length.md and ADR 0019;
 its final verification is tracked in docs/evidence/article-length.md. No product
 text is padded or shortened. Full article editor #29 and edition acceptance remain.
+
+## Editor workbench model
+
+PR #76 is merged and #28 closed after all PR workflows passed. The first #29 model
+slice supplies bounded private draft filters/cursors, actual frozen evidence and
+marked same-story proposals. Body corrections retain original lineage and replace
+sourcing/length approval data; genuine historical corrections cannot manufacture a
+new import or relabel archive identity. See ADR 0020 and docs/editor-workbench.md.
+This does not complete the editor UI, publisher origin/thread controls or complete
+review/publication/correction/withdrawal journey. No public write route is added.

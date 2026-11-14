@@ -94,6 +94,7 @@ fn draft(count: usize, language: &str, override_reason: Option<&str>) -> Revisio
                 private_note: "PRIVATE-LENGTH-EVIDENCE".into(),
             }],
             bindings: vec![Binding {
+                origin_version: None,
                 source_article_id: "reference".into(),
                 anchor_id: None,
                 location: Some("Synthetic general reference".into()),
