@@ -25,8 +25,11 @@ def main():
     suffix = uuid.uuid4().hex[:12]
     name = "worldnews-schema-" + suffix
     database = "worldnews_disposable_" + suffix
+    # Optional memory-backed fixture storage for small/VFS Docker workspaces.
+    # This suite checks schema/services, not the separate persistence drill.
+    storage = ["--tmpfs", "/var/lib/postgresql:rw,size=1g"] if os.environ.get("WORLDNEWS_TEST_PG_TMPFS") == "1" else []
     try:
-        run("run", "-d", "--name", name, "-p", "127.0.0.1::5432", "-e",
+        run("run", "-d", "--name", name, *storage, "-p", "127.0.0.1::5432", "-e",
             "POSTGRES_PASSWORD=synthetic-schema-only", "-e", "POSTGRES_DB=" + database,
             os.environ.get("WORLDNEWS_TEST_POSTGRES_IMAGE", "postgres:18-alpine"))
         for attempt in range(120):
@@ -118,6 +121,12 @@ def main():
             worker_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{worker_database}")
             subprocess.run(["cargo","test","-p","world-news","--locked","--test","worker","--","--ignored","--test-threads=1"],cwd=ROOT,env=worker_env,check=True)
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+worker_database)
+        if (ROOT/"backend/news/tests/origins.rs").is_file():
+            origins_database=database+"_origins"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+origins_database)
+            origins_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{origins_database}")
+            subprocess.run(["cargo","test","-p","world-news","--locked","--test","origins","--","--ignored","--test-threads=1"],cwd=ROOT,env=origins_env,check=True)
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+origins_database)
         if (ROOT/"backend/news/tests/structured_content.rs").is_file():
             structured_database=database+"_structured"
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+structured_database)

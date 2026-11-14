@@ -16,3 +16,5 @@ pub mod worker;
 pub mod taxonomy;
 
 pub mod threads;
+
+pub mod origins;
