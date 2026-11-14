@@ -2,7 +2,9 @@
 
 Related issues: #9, #26–#33. Executable settings: `config/editorial.json`.
 These are selected initial settings, not claims about existing publisher behaviour.
-The Rust editor/domain will enforce them; the current Next app does not yet do so.
+The Rust editorial services enforce attribution and revision-bound length policy;
+the complete article editor remains #29. The transitional Next app does not enforce
+these new publication gates.
 
 ## Publication identity and formats
 
@@ -20,7 +22,7 @@ in UTC, and label the latest available edition honestly when it is older than to
 Budgets are configurable guidance. A reasoned override is preferable to padding
 or mechanical truncation. Count body prose/headings; exclude headline, standfirst,
 source lists and citation markers. Supported-language tokenisation must be
-documented/tested in #28. Reading estimates initially use 200 words/minute and
+documented/tested in [article length](article-length.md). Reading estimates initially use 200 words/minute and
 round up; label them estimates. A 10-minute edition target is a composition
 warning, never a reason to omit essential caveats or fabricate filler.
 
@@ -63,6 +65,6 @@ fails review; a 65-word urgent notice may pass with a documented length override
 Imported text is untrusted material, not instructions. Rights metadata determines
 whether full text may be retained/displayed; a feed is not permission to republish.
 
-See #28 for counting/overrides, #27 for citations, #29 for editorial UI and #30
+See [length policy](article-length.md), [citations](citation-policy.md), #29 for editorial UI and #30
 for edition composition. Software validates structure; editors assess relevance,
 fairness, adequate context and whether the evidence supports publication.

@@ -36,7 +36,14 @@ impl Config {
     ) -> Result<EditorialPolicy, &'static str> {
         let text = match get("NEWS_EDITORIAL_CONFIG") {
             Some(path) => {
-                std::fs::read_to_string(path).map_err(|_| "Cannot read NEWS_EDITORIAL_CONFIG")?
+                use std::io::Read;
+                let mut bytes = Vec::new();
+                std::fs::File::open(path)
+                    .map_err(|_| "Cannot read NEWS_EDITORIAL_CONFIG")?
+                    .take(65537)
+                    .read_to_end(&mut bytes)
+                    .map_err(|_| "Cannot read NEWS_EDITORIAL_CONFIG")?;
+                String::from_utf8(bytes).map_err(|_| "Invalid editorial policy encoding")?
             }
             None => include_str!("../../../config/editorial.json").to_owned(),
         };
@@ -359,6 +366,50 @@ mod taxonomy_tests {
         assert_eq!(
             Config::from_lookup(get).unwrap_err(),
             "Cannot read NEWS_TAXONOMY_CONFIG"
+        );
+    }
+}
+
+#[cfg(test)]
+mod editorial_policy_tests {
+    use super::*;
+    #[test]
+    fn policy_file_is_bounded_validated_and_does_not_expose_paths() {
+        let path = std::env::temp_dir().join(format!(
+            "worldnews-editorial-{}-private-marker.json",
+            std::process::id()
+        ));
+        let mut policy = EditorialPolicy::repository();
+        policy.formats.brief.max_words = 140;
+        std::fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        let get = |key: &str| match key {
+            "DATABASE_URL" => Some("postgres://fixture:synthetic@127.0.0.1/news".into()),
+            "NEWS_EDITORIAL_CONFIG" => Some(path.to_str().unwrap().into()),
+            _ => None,
+        };
+        assert_eq!(
+            Config::from_lookup(get)
+                .unwrap()
+                .editorial
+                .formats
+                .brief
+                .max_words,
+            140
+        );
+        std::fs::write(&path, " ".repeat(65537)).unwrap();
+        assert_eq!(
+            Config::from_lookup(get).unwrap_err(),
+            "Editorial policy exceeds its size limit"
+        );
+        std::fs::write(&path, [0xff, 0xfe]).unwrap();
+        assert_eq!(
+            Config::from_lookup(get).unwrap_err(),
+            "Invalid editorial policy encoding"
+        );
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(
+            Config::from_lookup(get).unwrap_err(),
+            "Cannot read NEWS_EDITORIAL_CONFIG"
         );
     }
 }

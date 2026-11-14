@@ -103,6 +103,7 @@ pub struct RevisionInput {
     pub geography: Vec<String>,
     pub reason: String,
     pub evidence: Option<crate::sourcing::SourcePackage>,
+    pub length_override: Option<String>,
 }
 impl RevisionInput {
     fn validate(&self) -> Result<(), AppError> {
@@ -144,10 +145,20 @@ pub struct RevisionRecord {
 #[derive(Clone)]
 pub struct EditorialService {
     pool: PgPool,
+    policy: std::sync::Arc<crate::domain::EditorialPolicy>,
 }
 impl EditorialService {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self::with_policy(
+            pool,
+            std::sync::Arc::new(crate::domain::EditorialPolicy::repository()),
+        )
+    }
+    pub fn with_policy(
+        pool: PgPool,
+        policy: std::sync::Arc<crate::domain::EditorialPolicy>,
+    ) -> Self {
+        Self { pool, policy }
     }
     async fn begin(
         &self,
@@ -166,7 +177,7 @@ impl EditorialService {
         check_id(id)?;
         input.validate()?;
         let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
-        let head = create_in_transaction(&mut tx, &actor, id, input).await?;
+        let head = create_in_transaction(&mut tx, &actor, id, input, &self.policy).await?;
         tx.commit()
             .await
             .map_err(|e| AppError::database("editorial_commit", e))?;
@@ -187,7 +198,7 @@ impl EditorialService {
         if head.public_state == PublicState::Withdrawn {
             return Err(AppError::Conflict);
         }
-        let revision = insert_revision(&mut tx, id, &actor, input).await?;
+        let revision = insert_revision(&mut tx, id, &actor, input, &self.policy).await?;
         sqlx::query("UPDATE news.stories SET current_revision_id=$2,review_state='draft',state=CASE WHEN published_revision_id IS NULL THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
             .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_revise",e))?;
         finish(tx, &head, &revision, &actor, "revised", &reason).await
@@ -247,13 +258,68 @@ impl EditorialService {
         }
         let old = load_revision(&mut tx, &head.current_revision_id).await?;
         package.validate(&old.body, old.kind)?;
+        let length = crate::length::private_assessment(&mut tx, &old.id)
+            .await?
+            .unwrap_or(crate::length::Assessment::new(
+                &old.body,
+                &old.language,
+                old.format,
+                &self.policy,
+                None,
+            )?);
         let sourcing = serde_json::json!({"schema":1,"package":package});
-        let revision:String=sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT story_id,number+1,title,standfirst,summary,body,language,format,kind,topics,geography,$3,$4,provenance || jsonb_build_object('sourcing',$5::jsonb,'sourcing_previous_revision',id) FROM news.story_revisions WHERE story_id=$1 AND id=$2 RETURNING id")
-            .bind(id).bind(&old.id).bind(actor.id()).bind(reason).bind(Json(sourcing)).fetch_one(&mut *tx).await.map_err(|e|AppError::database("sourcing_revision",e))?;
+        let revision:String=sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT story_id,number+1,title,standfirst,summary,body,language,format,kind,topics,geography,$3,$4,provenance || jsonb_build_object('sourcing',$5::jsonb,'sourcing_previous_revision',id,'length',$6::jsonb) FROM news.story_revisions WHERE story_id=$1 AND id=$2 RETURNING id")
+            .bind(id).bind(&old.id).bind(actor.id()).bind(reason).bind(Json(sourcing)).bind(Json(length)).fetch_one(&mut *tx).await.map_err(|e|AppError::database("sourcing_revision",e))?;
         crate::sourcing::attach(&mut tx, &revision, &package).await?;
         sqlx::query("UPDATE news.stories SET current_revision_id=$2,review_state='draft',state=CASE WHEN published_revision_id IS NULL THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
             .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("sourcing_head",e))?;
         finish(tx, &head, &revision, &actor, "revised", reason).await
+    }
+    pub async fn length_revision(
+        &self,
+        session: &Session,
+        id: &str,
+        expected: i64,
+        override_reason: Option<String>,
+        reason: &str,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        check_reason(reason)?;
+        let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
+        let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.public_state == PublicState::Withdrawn {
+            return Err(AppError::Conflict);
+        }
+        let old = load_revision(&mut tx, &head.current_revision_id).await?;
+        let length = crate::length::Assessment::new(
+            &old.body,
+            &old.language,
+            old.format,
+            &self.policy,
+            override_reason,
+        )?;
+        let revision:String=sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT story_id,number+1,title,standfirst,summary,body,language,format,kind,topics,geography,$3,$4,provenance || jsonb_build_object('length',$5::jsonb,'length_previous_revision',id) FROM news.story_revisions WHERE story_id=$1 AND id=$2 RETURNING id")
+            .bind(id).bind(&old.id).bind(actor.id()).bind(reason).bind(Json(length)).fetch_one(&mut *tx).await.map_err(|e|AppError::database("length_revision",e))?;
+        sqlx::query("INSERT INTO news.citations(revision_id,claim_id,source_article_id,location,anchor_id,origin_version) SELECT $1,claim_id,source_article_id,location,anchor_id,origin_version FROM news.citations WHERE revision_id=$2")
+            .bind(&revision).bind(&old.id).execute(&mut *tx).await.map_err(|e|AppError::database("length_citations",e))?;
+        sqlx::query("UPDATE news.stories SET current_revision_id=$2,review_state='draft',state=CASE WHEN published_revision_id IS NULL THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
+            .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("length_head",e))?;
+        finish(tx, &head, &revision, &actor, "revised", reason).await
+    }
+    pub async fn length_report(
+        &self,
+        session: &Session,
+        revision: &str,
+    ) -> Result<crate::length::Report, AppError> {
+        check_id(revision)?;
+        let (mut tx, _) = self.begin(session, Permission::Edit).await?;
+        let value = load_revision(&mut tx, revision).await?;
+        let recorded = crate::length::private_assessment(&mut tx, revision).await?;
+        let report = crate::length::Report::new(&value, &self.policy, recorded)?;
+        tx.commit()
+            .await
+            .map_err(|e| AppError::database("length_report", e))?;
+        Ok(report)
     }
     pub async fn submit(
         &self,
@@ -376,6 +442,7 @@ impl EditorialService {
         }
         let revision = load_revision(&mut tx, &head.current_revision_id).await?;
         crate::citations::publication_check(&mut tx, &revision).await?;
+        crate::length::publication_check(&mut tx, &revision, &self.policy).await?;
         let action = if head.published_revision_id.is_some() {
             "corrected"
         } else {
@@ -495,6 +562,7 @@ pub(crate) async fn create_in_transaction(
     actor: &Principal,
     id: &str,
     input: RevisionInput,
+    policy: &crate::domain::EditorialPolicy,
 ) -> Result<Head, AppError> {
     check_id(id)?;
     input.validate()?;
@@ -503,7 +571,7 @@ pub(crate) async fn create_in_transaction(
         .execute(&mut **tx)
         .await
         .map_err(|e| AppError::database("editorial_create", e))?;
-    let revision = insert_revision(tx, id, actor, input).await?;
+    let revision = insert_revision(tx, id, actor, input, policy).await?;
     sqlx::query("UPDATE news.stories SET current_revision_id=$2,lock_version=1,updated_at=now() WHERE id=$1").bind(id).bind(&revision).execute(&mut **tx).await.map_err(|e|AppError::database("editorial_create_head",e))?;
     action(
         tx,
@@ -544,9 +612,17 @@ async fn insert_revision(
     id: &str,
     actor: &Principal,
     input: RevisionInput,
+    policy: &crate::domain::EditorialPolicy,
 ) -> Result<String, AppError> {
+    let length = crate::length::Assessment::new(
+        &input.body,
+        &input.language,
+        input.format,
+        policy,
+        input.length_override,
+    )?;
     let evidence = input.evidence;
-    let provenance = serde_json::json!({"workflow":"editorial","origin":"manual_submission","body_schema":2,
+    let provenance = serde_json::json!({"workflow":"editorial","origin":"manual_submission","body_schema":2,"length":length,
         "sourcing":evidence.as_ref().map(|p|serde_json::json!({"schema":1,"package":p}))});
     let revision:String=sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT $1,COALESCE(MAX(number),0)+1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13 FROM news.story_revisions WHERE story_id=$1 RETURNING id")
         .bind(id).bind(input.title).bind(input.standfirst).bind(input.summary).bind(Json(input.body)).bind(input.language).bind(input.format.as_str()).bind(input.kind.as_str()).bind(input.topics).bind(input.geography).bind(actor.id()).bind(input.reason).bind(Json(provenance))

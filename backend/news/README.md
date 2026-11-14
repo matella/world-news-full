@@ -250,3 +250,14 @@ count definitions and escaped footnotes, never private evidence notes. There is
 still no publishing HTTP endpoint before word/editor acceptance. Migration 16
 requires the documented narrow publisher read/helper grants in an approved release;
 no live migration/grant change follows from the source implementation.
+
+## Revision-bound article length
+
+See [article length](../../docs/article-length.md) and ADR 0019. Default brief/standard/
+analysis ranges are 80–150/350–600/800–1,200 body words, configurable by language and
+format. Private drafts display counts/targets and support public reasoned exceptions
+without changing prose. Publication rechecks the exact immutable assessment and
+active policy. Use `EditorialService::with_policy` for configured paths. Unsupported
+counting languages are explicitly approximate and receive no numeric reading-time
+estimate. Migration 17 allowlists public assessment metadata; full editorial HTTP
+publication remains #29. No live schema/grant/deployment effect is implied.

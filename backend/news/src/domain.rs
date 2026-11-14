@@ -1,14 +1,16 @@
 //! Editorial settings shared by web and future worker/publishing services.
-use serde::Deserialize;
+use crate::content::ArticleFormat;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WordBudget {
     pub min_words: u32,
     pub max_words: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Formats {
     pub brief: WordBudget,
@@ -16,7 +18,7 @@ pub struct Formats {
     pub analysis: WordBudget,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditorialPolicy {
     pub version: u32,
@@ -25,6 +27,8 @@ pub struct EditorialPolicy {
     pub publication_mode: String,
     pub audience: String,
     pub formats: Formats,
+    #[serde(default)]
+    pub language_formats: BTreeMap<String, Formats>,
     pub reading_words_per_minute: u32,
     pub edition_target_minutes: u32,
     pub length_override_requires_reason: bool,
@@ -33,9 +37,21 @@ pub struct EditorialPolicy {
 }
 
 impl EditorialPolicy {
+    pub fn repository() -> Self {
+        Self::parse(include_str!("../../../config/editorial.json"))
+            .expect("validated bundled editorial policy")
+    }
     pub fn parse(text: &str) -> Result<Self, &'static str> {
+        if text.len() > 65536 {
+            return Err("Editorial policy exceeds its size limit");
+        }
         let policy: Self =
             serde_json::from_str(text).map_err(|_| "Invalid editorial JSON schema")?;
+        policy.validate()?;
+        Ok(policy)
+    }
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let policy = self;
         if policy.version != 1 {
             return Err("Unsupported editorial policy version");
         }
@@ -58,16 +74,46 @@ impl EditorialPolicy {
         if policy.reading_words_per_minute == 0 || policy.edition_target_minutes == 0 {
             return Err("Reading and edition budgets must be positive");
         }
-        for budget in [
-            &policy.formats.brief,
-            &policy.formats.standard,
-            &policy.formats.analysis,
-        ] {
+        if policy.language_formats.len() > 20
+            || policy
+                .language_formats
+                .keys()
+                .any(|key| !crate::content::valid_language(key) || key.to_ascii_lowercase() != *key)
+        {
+            return Err("Invalid language word-budget overrides");
+        }
+        for budget in std::iter::once(&policy.formats)
+            .chain(policy.language_formats.values())
+            .flat_map(|f| [&f.brief, &f.standard, &f.analysis])
+        {
             if budget.min_words == 0 || budget.max_words < budget.min_words {
                 return Err("Invalid article word budget");
             }
         }
-        Ok(policy)
+        Ok(())
+    }
+    pub fn budget(&self, language: &str, format: ArticleFormat) -> &WordBudget {
+        let language = language.to_ascii_lowercase();
+        let formats = self
+            .language_formats
+            .get(&language)
+            .or_else(|| {
+                self.language_formats
+                    .get(language.split('-').next().unwrap_or("und"))
+            })
+            .unwrap_or(&self.formats);
+        match format {
+            ArticleFormat::Brief => &formats.brief,
+            ArticleFormat::Standard => &formats.standard,
+            ArticleFormat::Analysis => &formats.analysis,
+        }
+    }
+    pub fn length_fingerprint(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let value = serde_json::json!({"count_policy":"word-v1","formats":self.formats,
+            "language_formats":self.language_formats,"requires_reason":self.length_override_requires_reason,
+            "reading_words_per_minute":self.reading_words_per_minute});
+        format!("{:x}", Sha256::digest(value.to_string().as_bytes()))
     }
 }
 

@@ -73,6 +73,7 @@ fn draft(id: &str) -> OriginalDraft {
     OriginalDraft {
         id: id.into(),
         input: RevisionInput {
+            length_override: None,
             evidence: None,
             title: "Editor-authored original draft".into(),
             standfirst: None,

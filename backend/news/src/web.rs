@@ -56,6 +56,8 @@ struct Page {
     next: Option<String>,
     article: Option<Revision>,
     evidence: Option<crate::citations::Report>,
+    length: Option<crate::length::Report>,
+    length_private: bool,
     legacy: bool,
 }
 struct Item {
@@ -81,6 +83,8 @@ impl Page {
             next: None,
             article: None,
             evidence: None,
+            length: None,
+            length_private: false,
             legacy: false,
         }
     }
@@ -303,6 +307,7 @@ async fn story(
             page.items.push(Item { title: "Lire la version actuelle".into(), href: Some(path_segment("story", &id)), detail: String::new() });
         }
         page.evidence = Some(crate::citations::Citations::new(state.pool.clone()).public(&revision).await?);
+        page.length=Some(crate::length::public_report(&state.pool,&revision,&state.config.editorial).await?);
         page.legacy = matches!(
             revision.kind,
             ArticleKind::LegacySummary | ArticleKind::LegacySynthesis
