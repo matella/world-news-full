@@ -136,3 +136,13 @@ See [service contracts](../../docs/editorial-service.md),
 record. Citation/structure/word-budget checks and editor UI are still required;
 no publishing HTTP endpoint is exposed yet. Migration 5 adds private review/action
 state without inventing historical approvals or changing legacy public tables.
+
+## Source registry
+
+The internal `Registry` provides publisher-authorised, versioned source/feed/origin
+configuration and editor reads. Unknown rights remain metadata/link only. Disabling
+retains history; renaming an outlet preserves captured citation labels. Each change
+has a private immutable before/after audit. Registry operations make no HTTP request
+and start no subscriptions. See [contracts](../../docs/source-registry.md) and
+[ADR 0005](../../docs/architecture/0005-source-registry.md). Admin screens and safe
+fetching/extraction/jobs remain separate work; no new dependencies are introduced.

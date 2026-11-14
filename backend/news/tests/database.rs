@@ -124,7 +124,8 @@ async fn migrations_constraints_snapshots_and_reader_boundary() {
         "23514",
     )
     .await;
-    expect_code(&pool, "INSERT INTO news.source_articles(source_id,canonical_key,original_url,title,body) VALUES ('missing','x','https://feed.invalid/x','x','unlicensed copy')", "23514").await;
+    expect_code(&pool, "INSERT INTO news.source_articles(source_id,canonical_key,original_url,title,body) VALUES ('pre-v3','x','https://feed.invalid/x','x','unlicensed copy')", "23514").await;
+    expect_code(&pool, "INSERT INTO news.source_articles(source_id,canonical_key,original_url,title) VALUES ('missing','missing','https://feed.invalid/missing','Missing source')", "23503").await;
 
     sqlx::raw_sql("INSERT INTO news.sources(id,name,homepage_url) VALUES ('source','Synthetic outlet','https://feed.invalid');
         INSERT INTO news.source_articles(id,source_id,canonical_key,original_url,title) VALUES ('article','source','fixture-key','https://feed.invalid/article','Synthetic article');

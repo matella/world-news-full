@@ -80,6 +80,30 @@ impl Session {
     }
 }
 
+pub(crate) async fn begin_authorised(
+    pool: &PgPool,
+    session: &Session,
+    permission: Permission,
+) -> Result<(Transaction<'static, Postgres>, Principal), AppError> {
+    if !persistence::schema_available(pool).await {
+        return Err(AppError::Unavailable);
+    }
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| AppError::database("editorial_begin", e))?;
+    match live_principal(&mut tx, session, permission).await {
+        Ok(principal) => Ok((tx, principal)),
+        Err(error) => {
+            let _ = tx.rollback().await;
+            if error == AppError::Forbidden {
+                record_service_denial(pool, session).await?;
+            }
+            Err(error)
+        }
+    }
+}
+
 /// Lock identity before session, matching operator revocation's lock order. The
 /// caller retains these locks through its editorial commit, never across UI work.
 pub(crate) async fn live_principal(

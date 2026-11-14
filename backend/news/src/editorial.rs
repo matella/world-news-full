@@ -3,7 +3,6 @@ use crate::{
     auth::{self, Permission, Principal, Session},
     content::*,
     error::AppError,
-    persistence,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -151,25 +150,9 @@ impl EditorialService {
         session: &Session,
         permission: Permission,
     ) -> Result<(Transaction<'static, Postgres>, Principal), AppError> {
-        if !persistence::schema_available(&self.pool).await {
-            return Err(AppError::Unavailable);
-        }
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| AppError::database("editorial_begin", e))?;
-        match auth::live_principal(&mut tx, session, permission).await {
-            Ok(principal) => Ok((tx, principal)),
-            Err(error) => {
-                let _ = tx.rollback().await;
-                if error == AppError::Forbidden {
-                    auth::record_service_denial(&self.pool, session).await?;
-                }
-                Err(error)
-            }
-        }
+        auth::begin_authorised(&self.pool, session, permission).await
     }
+
     pub async fn create(
         &self,
         session: &Session,

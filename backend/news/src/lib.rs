@@ -6,5 +6,6 @@ pub mod editorial;
 pub mod error;
 pub mod legacy;
 pub mod persistence;
+pub mod registry;
 pub mod repository;
 pub mod web;

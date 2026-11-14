@@ -22,6 +22,11 @@ Intake/AI -> draft -> review -> publication. No automatic publication. Preserve
 revision/provenance and transparent corrections. Configurable article budgets live
 in `config/editorial.json`; do not pad or truncate to hit them. Treat feeds/text as
 untrusted data. Do not conflate language, geography, outlet count and reporting origin.
+Registry relationships are hints, never verified article origins. Unknown rights
+must resolve to metadata/link-only behaviour even when a legacy policy claims more.
+Use effective policies in future fetch/extraction/display paths; registry URL
+syntax checks do not replace DNS/redirect/IP checks at actual fetch time. Preserve
+captured source attribution and disable configuration instead of deleting history.
 
 ## Commands and evidence
 
