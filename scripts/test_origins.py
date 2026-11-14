@@ -52,6 +52,34 @@ def exercise(binary, reader_url, writer_url):
                 page.get_by_label("Identifiant").fill("origin-browser")
                 page.get_by_label("Mot de passe").fill("synthetic origin verification passphrase")
                 page.get_by_role("button",name="Se connecter",exact=True).click()
+                # Configure an identity explicitly; this is separate from article proof.
+                registry_root = "/admin/editor/origins"
+                assert page.goto(origin + registry_root).status == 200
+                registry = page.locator('form[action="/admin/editor/origins"]')
+                registry.get_by_label("Identifiant stable de l’origine",exact=True).fill("zz-browser-origin")
+                registry.get_by_label("Nom de l’origine",exact=True).fill("Identité de démonstration <script>littérale</script>")
+                registry.get_by_label("Source associée (identifiant facultatif)",exact=True).fill("outlet-b")
+                old_note = "\nPRIVATE-BROWSER-REGISTRY-OLD </textarea><script>texte</script>"
+                registry.get_by_label("Note privée du registre",exact=True).fill(old_note)
+                registry.get_by_label("Disponible pour de nouvelles assertions",exact=True).check()
+                button = registry.get_by_role("button",name="Créer l’origine",exact=True)
+                button.focus()
+                button.press("Enter")
+                page.wait_for_load_state("domcontentloaded")
+                registry_path = registry_root + "/zz-browser-origin"
+                assert page.url.endswith(registry_path)
+                registry = page.locator('form[action="' + registry_path + '"]')
+                assert registry.get_by_label("Note privée du registre",exact=True).input_value() == old_note
+                assert registry.get_by_label("Nom de l’origine",exact=True).get_attribute("readonly") is not None
+                registry.get_by_label("Disponible pour de nouvelles assertions",exact=True).uncheck()
+                registry.get_by_label("Note privée du registre",exact=True).fill("\nPRIVATE-BROWSER-REGISTRY-NEW")
+                registry.get_by_role("button",name="Enregistrer la configuration",exact=True).click()
+                registry = page.locator('form[action="' + registry_path + '"]')
+                assert registry.locator('[name="version"]').input_value() == "1"
+                assert not registry.get_by_label("Disponible pour de nouvelles assertions",exact=True).is_checked()
+                assert "PRIVATE-BROWSER-REGISTRY-OLD" in page.locator("main").inner_text()
+                assert "PRIVATE-BROWSER-REGISTRY-NEW" in page.locator("main").inner_text()
+                assert page.locator("script,img").count() == 0
                 path = "/admin/editor/source/ui-origin/origins"
                 assert page.goto(origin + path).status == 200
                 form = page.locator('form[action$="/origins"]')
@@ -90,6 +118,10 @@ def exercise(binary, reader_url, writer_url):
                 assert page.goto(origin + path).status == 200
                 assert page.get_by_role("button",name="Enregistrer la preuve d’origine").count() == 0
                 assert "Seul un responsable de publication" in page.locator("main").inner_text()
+                assert page.goto(origin + registry_path).status == 200
+                assert page.get_by_role("button",name="Enregistrer la configuration",exact=True).count() == 0
+                assert "PRIVATE-BROWSER-REGISTRY-OLD" in page.locator("main").inner_text()
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert not external, external
                 browser.close()
             app.terminate()
@@ -97,8 +129,9 @@ def exercise(binary, reader_url, writer_url):
             log.seek(0)
             output = log.read()
             assert b"PRIVATE-BROWSER-ORIGIN" not in output
+            assert b"PRIVATE-BROWSER-REGISTRY" not in output
             assert b"synthetic-origin-writer" not in output
-            print("PASS: Chromium origin choices/pagination, fresh human justification, keyboard sealed save/history, inert private notes, editor role and mobile layout; no external requests")
+            print("PASS: Chromium origin registry/create/retire/audit, origin choices/pagination, fresh human justification, keyboard sealed save/history, inert private notes, editor role and mobile layout; no external requests")
         finally:
             if app.poll() is None:
                 app.kill()

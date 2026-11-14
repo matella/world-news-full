@@ -14,7 +14,9 @@ use world_news::{
     editorial::EditorialService,
     error::AppError,
     origins::{OriginEvidence, OriginInput, OriginState},
-    persistence, web,
+    persistence,
+    registry::{Entity, Registry},
+    web,
 };
 use zeroize::Zeroizing;
 const PASSWORD: &str = "synthetic origin verification passphrase";
@@ -101,7 +103,7 @@ async fn text(response: axum::response::Response) -> String {
 }
 fn form(html: &str) -> std::collections::BTreeMap<String, String> {
     let doc = html_scraper::Html::parse_document(html);
-    let selector = html_scraper::Selector::parse("form[action^='/admin/editor/source/']").unwrap();
+    let selector = html_scraper::Selector::parse("form[action^='/admin/editor/']").unwrap();
     let form = doc.select(&selector).next().unwrap();
     let controls =
         html_scraper::Selector::parse("input[name],textarea[name],select[name]").unwrap();
@@ -431,6 +433,8 @@ async fn article_origin_assertions_preserve_unknowns_and_frozen_citation_evidenc
             .len(),
         1
     );
+    // Test-only registry curator grants; no live role is changed.
+    sqlx::raw_sql("GRANT SELECT ON news.registry_actions TO fixture_origin_writer; GRANT INSERT ON news.reporting_origins,news.registry_actions TO fixture_origin_writer; GRANT UPDATE(name,source_id,note,enabled,lock_version) ON news.reporting_origins TO fixture_origin_writer; GRANT USAGE ON SEQUENCE news.registry_actions_id_seq TO fixture_origin_writer;").execute(&owner).await.unwrap();
     // Real publisher/editor HTTP against the narrow writer, using an isolated source.
     sqlx::query("INSERT INTO news.source_articles(id,source_id,canonical_key,original_url,title,extraction_state) VALUES('ui-origin','outlet-b','ui-origin','https://b.invalid/ui-origin','Source <script>literal</script>','metadata_only')").execute(&owner).await.unwrap();
     for i in 0..25 {
@@ -588,6 +592,230 @@ async fn article_origin_assertions_preserve_unknowns_and_frozen_citation_evidenc
     .await;
     assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
     assert_eq!(form(&text(invalid).await)["origins"], "21");
+    let registry = Registry::new(writer.clone());
+    let root = "/admin/editor/origins";
+    let html = text(http(&app, "GET", root, Some(&publisher_cookie), false, &empty).await).await;
+    let mut registry_form = form(&html);
+    registry_form.insert("id".into(), "zz-ui-origin".into());
+    registry_form.insert(
+        "name".into(),
+        "Manual origin <script>literal name</script>".into(),
+    );
+    registry_form.insert("source".into(), "outlet-b".into());
+    let old_note = "\nPRIVATE-REGISTRY-OLD </textarea><script>literal note</script>";
+    registry_form.insert("note".into(), old_note.into());
+    registry_form.insert("enabled".into(), "yes".into());
+    let mut bad = registry_form.clone();
+    bad.remove("csrf");
+    assert_eq!(
+        http(&app, "POST", root, Some(&publisher_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            root,
+            Some(&publisher_cookie),
+            false,
+            &registry_form
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    let editor_page =
+        text(http(&app, "GET", root, Some(&editor_cookie), false, &empty).await).await;
+    assert!(!editor_page.contains("Créer l’origine</button>"));
+    let doc = html_scraper::Html::parse_document(&editor_page);
+    let token = doc
+        .select(&html_scraper::Selector::parse("input[name='csrf']").unwrap())
+        .next()
+        .unwrap()
+        .value()
+        .attr("value")
+        .unwrap()
+        .to_owned();
+    bad = registry_form.clone();
+    bad.insert("csrf".into(), token);
+    assert_eq!(
+        http(&app, "POST", root, Some(&editor_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    bad = registry_form.clone();
+    bad.insert("actor_id".into(), "origin-publisher".into());
+    assert_eq!(
+        http(&app, "POST", root, Some(&publisher_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    bad = registry_form.clone();
+    bad.insert("name".into(), "".into());
+    let invalid = http(&app, "POST", root, Some(&publisher_cookie), true, &bad).await;
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(form(&text(invalid).await)["note"], old_note);
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            root,
+            Some(&publisher_cookie),
+            true,
+            &registry_form
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    let registry_path = "/admin/editor/origins/zz-ui-origin";
+    let stored = registry.origin(&editor, "zz-ui-origin").await.unwrap();
+    assert_eq!(stored.version, 0);
+    assert_eq!(stored.spec.note.as_deref(), Some(old_note));
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            root,
+            Some(&publisher_cookie),
+            true,
+            &registry_form
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+    let html = text(
+        http(
+            &app,
+            "GET",
+            registry_path,
+            Some(&publisher_cookie),
+            false,
+            &empty,
+        )
+        .await,
+    )
+    .await;
+    assert!(!html.contains("<script>literal name</script>"));
+    registry_form = form(&html);
+    assert_eq!(registry_form["note"], old_note);
+    bad = registry_form.clone();
+    bad.insert("name".into(), "Rewrite immutable identity".into());
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            registry_path,
+            Some(&publisher_cookie),
+            true,
+            &bad
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+    bad = registry_form.clone();
+    bad.insert("source".into(), "outlet-a".into());
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            registry_path,
+            Some(&publisher_cookie),
+            true,
+            &bad
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+    registry_form.remove("enabled");
+    let new_note = "\nPRIVATE-REGISTRY-NEW";
+    registry_form.insert("note".into(), new_note.into());
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            registry_path,
+            Some(&publisher_cookie),
+            true,
+            &registry_form
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            registry_path,
+            Some(&publisher_cookie),
+            true,
+            &registry_form
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+    let rows = registry
+        .origin_history(&editor, "zz-ui-origin", None, PageSize::new(20).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].version, 1);
+    assert!(!rows[0].enabled);
+    assert_eq!(rows[0].note.as_deref(), Some(new_note));
+    assert_eq!(rows[1].note.as_deref(), Some(old_note));
+    assert_eq!(rows[0].actor_id, "origin-publisher");
+    assert!(
+        evidence
+            .assert(
+                &publisher,
+                "ui-origin",
+                1,
+                input(
+                    OriginState::Documented,
+                    &["zz-ui-origin"],
+                    "Retired identity cannot support a new assertion"
+                )
+            )
+            .await
+            .is_err()
+    );
+    // Decode the older raw-row audit shape as well as save_origin's typed Record.
+    registry
+        .disable(&publisher, Entity::Origin, "zz-ui-origin", 1)
+        .await
+        .unwrap();
+    let rows = registry
+        .origin_history(&editor, "zz-ui-origin", None, PageSize::new(20).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0].version, 2);
+    assert_eq!(rows[0].note.as_deref(), Some(new_note));
+    let older = registry
+        .origin_history(
+            &editor,
+            "zz-ui-origin",
+            Some(rows[0].id),
+            PageSize::new(1).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(older[0].version, 1);
+    assert!(
+        Registry::new(reader.clone())
+            .origin_history(&editor, "zz-ui-origin", None, PageSize::new(20).unwrap())
+            .await
+            .is_err()
+    );
     sqlx::query("UPDATE news.admin_sessions SET revoked_at=now() WHERE user_id='origin-publisher'")
         .execute(&owner)
         .await
@@ -605,6 +833,12 @@ async fn article_origin_assertions_preserve_unknowns_and_frozen_citation_evidenc
     ));
     assert!(evidence.current(&publisher, "ui-origin").await.is_err());
     assert!(evidence.choices(&publisher, &[], None).await.is_err());
+    assert!(
+        registry
+            .origin_history(&publisher, "zz-ui-origin", None, PageSize::new(20).unwrap())
+            .await
+            .is_err()
+    );
     worker.close().await;
     writer.close().await;
     reader.close().await;

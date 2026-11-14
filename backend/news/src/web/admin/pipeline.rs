@@ -1,3 +1,4 @@
+mod origin_registry;
 use super::super::{AppState, message, path_segment, with_query};
 
 use crate::{
@@ -344,6 +345,7 @@ struct ActionInput {
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .merge(origin_registry::routes())
         .route("/admin/assets.css", get(css))
         .route("/admin/pipeline", get(overview))
         .route("/admin/sources", get(sources).post(create_source))

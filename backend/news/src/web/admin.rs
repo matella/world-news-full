@@ -65,6 +65,8 @@ async fn guard(State(state): State<AppState>, mut request: Request, next: Next) 
             || path.starts_with("/admin/jobs/")
             || path.starts_with("/admin/extractions/")
             || path.starts_with("/admin/batches/")
+            || path == "/admin/editor/origins"
+            || path.starts_with("/admin/editor/origins/")
             || (path.starts_with("/admin/editor/source/") && path.ends_with("/origins"))
             || (path.starts_with("/admin/articles/") && path.ends_with("/extract")));
     let permission = if path == "/admin/publishing" || publisher_mutation {

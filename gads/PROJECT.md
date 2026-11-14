@@ -211,3 +211,15 @@ preserve private input only after reauthorisation. Never copy old private notes
 into automatic human attestations, refresh existing citations implicitly or expose
 private proof/actors through reader views. Registry/thread administration and full
 publication acceptance remain #29 gates; this screen does not publish articles.
+
+## Origin registry administration
+
+Use docs/source-registry.md and ADR 0024. Registry identity/configuration is never
+article proof. Existing origin ID/name/source association cannot be rewritten;
+availability and private notes use live publisher/version checks and immutable
+audit. Preserve both historical raw-row and typed-record audit formats in private
+reads; never expose notes/actors as public DTOs. Retire configuration instead of
+deleting identity/history. Strict bounded forms preserve validation/stale input
+only after reauthorisation. Keep leading textarea newlines and distinguish an
+input’s prepared proof version from the latest stored version. No live grants are
+authorised by test fixture grants or source merges; full #29 acceptance stays open.
