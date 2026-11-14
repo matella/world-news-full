@@ -57,7 +57,7 @@ pub struct Mutation {
 }
 pub struct MemberInput {
     pub story_id: String,
-    pub update_at: DateTime<Utc>,
+    pub update_at: Option<DateTime<Utc>>,
 }
 pub struct Merge<'a> {
     pub source: &'a str,
@@ -279,14 +279,19 @@ impl Threads {
         }
         let mut new = old.clone();
         new.version = next(old.version)?;
-        let instant = DateTime::from_timestamp_micros(input.update_at.timestamp_micros())
-            .ok_or(AppError::Validation("Invalid update instant."))?;
+        let instant = input
+            .update_at
+            .map(|instant| {
+                DateTime::from_timestamp_micros(instant.timestamp_micros())
+                    .ok_or(AppError::Validation("Invalid update instant."))
+            })
+            .transpose()?;
         match new
             .members
             .iter_mut()
             .find(|m| m.story_id == input.story_id)
         {
-            Some(m) => m.update_at = Some(instant),
+            Some(m) => m.update_at = instant,
             None => {
                 let now = sqlx::query_scalar("SELECT clock_timestamp()")
                     .fetch_one(&mut *tx)
@@ -294,7 +299,7 @@ impl Threads {
                     .map_err(db)?;
                 new.members.push(Member {
                     story_id: input.story_id,
-                    update_at: Some(instant),
+                    update_at: instant,
                     added_at: now,
                 });
             }
@@ -709,5 +714,160 @@ impl Threads {
             None
         };
         Ok(Page { items, next })
+    }
+}
+
+/// Private workbench data. No public serialization or inferred graph membership.
+#[derive(sqlx::FromRow)]
+pub struct ThreadCard {
+    pub id: String,
+    pub title: String,
+    pub state: String,
+    pub merged_into: Option<String>,
+    pub version: i64,
+    pub members: i64,
+}
+pub struct ThreadCards {
+    pub items: Vec<ThreadCard>,
+    pub next: Option<String>,
+}
+#[derive(sqlx::FromRow)]
+pub struct StoryChoice {
+    pub id: String,
+    pub title: Option<String>,
+    pub revision_id: Option<String>,
+    pub state: String,
+    pub thread_id: Option<String>,
+}
+pub struct StoryChoices {
+    pub items: Vec<StoryChoice>,
+    pub next: Option<String>,
+}
+/// Recorded snapshots are private audit, not caller-supplied restore authority.
+pub struct InversePreview {
+    pub action: Action,
+    pub before: Vec<Snapshot>,
+    pub after: Vec<Snapshot>,
+    pub eligible: bool,
+}
+impl Threads {
+    pub async fn cards(
+        &self,
+        session: &Session,
+        after: Option<&str>,
+        size: PageSize,
+    ) -> Result<ThreadCards, AppError> {
+        if let Some(id) = after {
+            check_id(id)?;
+        }
+        let (mut tx, _) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
+        let mut items:Vec<ThreadCard>=sqlx::query_as("SELECT t.id,t.title,t.state,t.merged_into,t.lock_version AS version,(SELECT count(*) FROM news.thread_stories m WHERE m.thread_id=t.id) AS members FROM news.threads t WHERE ($1::text IS NULL OR t.id>$1) ORDER BY t.id LIMIT $2")
+            .bind(after).bind(i64::from(size.get())+1).fetch_all(&mut *tx).await.map_err(db)?;
+        if items.iter().any(|c| {
+            !valid_id(&c.id)
+                || c.title.trim().is_empty()
+                || c.version < 0
+                || !(0..=200).contains(&c.members)
+                || !matches!(c.state.as_str(), "active" | "closed")
+                || c.merged_into.as_deref().is_some_and(|id| !valid_id(id))
+        }) {
+            return Err(AppError::InvalidData);
+        }
+        let more = items.len() > size.get() as usize;
+        items.truncate(size.get() as usize);
+        let next = if more {
+            items.last().map(|c| c.id.clone())
+        } else {
+            None
+        };
+        tx.commit().await.map_err(db)?;
+        Ok(ThreadCards { items, next })
+    }
+    pub async fn story_choices(
+        &self,
+        session: &Session,
+        selected: &[String],
+        after: Option<&str>,
+    ) -> Result<StoryChoices, AppError> {
+        if selected.len() > 800
+            || selected.iter().any(|id| !valid_id(id))
+            || after.is_some_and(|id| !valid_id(id))
+        {
+            return Err(AppError::Validation("Invalid story choices."));
+        }
+        let (mut tx, _) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
+        let mut items:Vec<StoryChoice>=sqlx::query_as("SELECT s.id,r.title,s.current_revision_id AS revision_id,s.state,m.thread_id FROM news.stories s LEFT JOIN news.story_revisions r ON r.id=s.current_revision_id LEFT JOIN news.thread_stories m ON m.story_id=s.id WHERE ($1::text IS NULL OR s.id>$1) ORDER BY s.id LIMIT 21")
+            .bind(after).fetch_all(&mut *tx).await.map_err(db)?;
+        let more = items.len() > 20;
+        items.truncate(20);
+        let next = if more {
+            items.last().map(|r| r.id.clone())
+        } else {
+            None
+        };
+        let retained:Vec<StoryChoice>=sqlx::query_as("SELECT s.id,r.title,s.current_revision_id AS revision_id,s.state,m.thread_id FROM news.stories s LEFT JOIN news.story_revisions r ON r.id=s.current_revision_id LEFT JOIN news.thread_stories m ON m.story_id=s.id WHERE s.id=ANY($1) ORDER BY s.id")
+            .bind(selected).fetch_all(&mut *tx).await.map_err(db)?;
+        for row in retained {
+            if !items.iter().any(|r| r.id == row.id) {
+                items.push(row);
+            }
+        }
+        if items.iter().any(|r| {
+            r.revision_id.is_some() != r.title.is_some()
+                || r.title.as_deref().is_some_and(|t| t.trim().is_empty())
+                || !valid_id(&r.id)
+        }) {
+            return Err(AppError::InvalidData);
+        }
+        tx.commit().await.map_err(db)?;
+        Ok(StoryChoices { items, next })
+    }
+    pub async fn inverse_preview(
+        &self,
+        session: &Session,
+        id: i64,
+    ) -> Result<InversePreview, AppError> {
+        if id <= 0 {
+            return Err(AppError::Validation("Invalid thread action ID."));
+        }
+        let (mut tx, _) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
+        let action:Action=sqlx::query_as("SELECT id,actor_id,action,reason,undo_of,created_at FROM news.thread_actions WHERE id=$1").bind(id).fetch_optional(&mut *tx).await.map_err(db)?.ok_or(AppError::NotFound)?;
+        let (Json(before), Json(after)): (Json<Vec<Snapshot>>, Json<Vec<Snapshot>>) =
+            sqlx::query_as("SELECT before_state,after_state FROM news.thread_actions WHERE id=$1")
+                .bind(id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(db)?;
+        if after.is_empty()
+            || after.len() > 2
+            || before.len() > 2
+            || before.iter().chain(after.iter()).any(|s| {
+                !valid_id(&s.id)
+                    || s.members.len() > 200
+                    || s.version < 0
+                    || s.members.iter().any(|m| !valid_id(&m.story_id))
+            })
+        {
+            return Err(AppError::InvalidData);
+        }
+        let mut eligible = !sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM news.thread_actions WHERE undo_of=$1)",
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db)?;
+        for recorded in &after {
+            if load(&mut tx, &recorded.id, false).await? != *recorded {
+                eligible = false;
+            }
+        }
+        tx.commit().await.map_err(db)?;
+        Ok(InversePreview {
+            action,
+            before,
+            after,
+            eligible,
+        })
     }
 }

@@ -217,3 +217,14 @@ both stored event formats. See ADR 0024 and docs/source-registry.md. Registry
 configuration remains separate from article evidence. No schema/dependency,
 source HTTP, article-publication route or live change is introduced. Audited thread
 controls and complete author/review/publish/correct/withdraw acceptance remain.
+
+## Private thread workbench preparation
+
+PR #81 is merged at c76ac6c86845dfa0d4e543d6116ad5f024c931a4 after all workflows
+passed. The next #29 service slice adds bounded private thread/story metadata and
+observational inverse previews. It fixes the mismatch between nullable stored
+instants and a timestamp-required assign API: curators can explicitly declare an
+unknown instant without inventing one. Known callers use Some; None stays unknown
+through versioned corrections and undo/redo. See ADR 0025 and docs/story-threads.md.
+No schema/dependency or curation/publication HTTP endpoint is added. Full audited
+curation forms and complete article publication acceptance remain open.
