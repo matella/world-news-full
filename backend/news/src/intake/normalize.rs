@@ -123,6 +123,19 @@ impl Normalizer {
         Self { pool }
     }
     pub async fn apply(&self, attempt: i64) -> Result<NormalizeOutcome, AppError> {
+        self.apply_inner(attempt, None).await
+    }
+    pub(crate) async fn apply_claimed(
+        &self,
+        lease: &super::jobs::Lease,
+    ) -> Result<NormalizeOutcome, AppError> {
+        self.apply_inner(lease.batch_id(), Some(lease)).await
+    }
+    async fn apply_inner(
+        &self,
+        attempt: i64,
+        lease: Option<&super::jobs::Lease>,
+    ) -> Result<NormalizeOutcome, AppError> {
         if attempt <= 0 {
             return Err(AppError::Validation("Invalid batch ID."));
         }
@@ -138,6 +151,9 @@ impl Normalizer {
             .execute(&mut *tx)
             .await
             .map_err(db)?;
+        if let Some(lease) = lease {
+            super::jobs::lock_lease(&mut tx, lease).await?;
+        }
         // Small-project initial policy: serialize batches, including different feeds.
         // Other article writers must still honour unique identity/conflict constraints.
         sqlx::query("SELECT pg_advisory_xact_lock(781642901)")
@@ -152,6 +168,9 @@ impl Normalizer {
         .await
         .map_err(db)?
         {
+            if let Some(lease) = lease {
+                super::jobs::finish_success(&mut tx, lease).await?;
+            }
             tx.commit().await.map_err(db)?;
             return Ok(NormalizeOutcome::Applied(result));
         }
@@ -248,6 +267,9 @@ impl Normalizer {
             sqlx::query("INSERT INTO news.source_observations(attempt_id,entry_index,source_article_id,disposition,reason,original_entry,canonical_url,canonical_key,semantic_hash,observed_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)").bind(attempt).bind(index as i32).bind(article).bind(disposition).bind(reason).bind(Json(raw)).bind(url).bind(key).bind(fingerprint).bind(observed).execute(&mut *tx).await.map_err(db)?;
         }
         sqlx::query("INSERT INTO news.normalized_batches(attempt_id,normalizer_version,result) VALUES($1,1,$2)").bind(attempt).bind(Json(&result)).execute(&mut *tx).await.map_err(db)?;
+        if let Some(lease) = lease {
+            super::jobs::finish_success(&mut tx, lease).await?;
+        }
         tx.commit().await.map_err(db)?;
         Ok(NormalizeOutcome::Applied(result))
     }

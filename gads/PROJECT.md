@@ -39,6 +39,10 @@ text separate from immutable provenance so revoked storage can remove the text.
 Manual notes/original drafts are separately authored, never automatic text copies.
 Persist metadata before advancing feed validators; fetch status is not publication
 or whole-pipeline success. Do not add a startup polling loop before job/recovery gates.
+Use separate worker DB authority, never a fabricated/permanent editor session.
+Normalization jobs must fence writes and acknowledge success in the same transaction
+as their content receipt. Preserve attempts/generations and audit manual replay.
+The explicit normalization worker does not authorize fetch/extraction scheduling.
 
 ## Commands and evidence
 
@@ -49,6 +53,7 @@ or whole-pipeline success. Do not add a startup polling loop before job/recovery
 | Transitional frontend | `cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm run build` (explicit DATABASE_URL required) |
 | Current Rust skeleton | `cargo build --workspace --locked` |
 | New Rust foundation | `cargo run -p world-news -- --check-config`, `cargo run -p world-news` (DATABASE_URL required; default port 3001) |
+| Explicit normalization worker | `world-news --work-normalization-once` with an isolated worker DATABASE_URL; see docs/normalization-jobs.md; no startup scheduler |
 | Rust process smoke test | `python3 scripts/test_rust_runtime.py` after cargo build |
 | Owned schema integration | `python3 scripts/test_database.py` (creates a disposable local DB; regular cargo test deliberately ignores this opt-in suite) |
 | Explicit schema change | `cargo run -p world-news -- --migrate` with authorised migration-owner DATABASE_URL; never run against live data without its release plan |
