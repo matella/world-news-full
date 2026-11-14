@@ -122,3 +122,17 @@ Argon2 0.6.0 and cookie 0.18.2 are current inspected Rust-compatible releases
 transitive packages implement maintained hashing/PHC/cookie/time primitives. A
 complete security audit, live TLS/proxy/grant verification and actual editorial
 publication remain separate gates; the dashboard explicitly says so.
+
+## Editorial service
+
+The internal `EditorialService` now provides live-session-authorised create/save,
+submit/review, publish/correct and withdraw transactions, plus bounded private
+history. Actor IDs are never caller inputs. Candidate review state is independent
+of public state so pending corrections preserve the approved article. Every write
+requires the current lock version, and saved revisions invalidate approval.
+
+See [service contracts](../../docs/editorial-service.md),
+[ADR 0004](../../docs/architecture/0004-editorial-transactions.md) and the evidence
+record. Citation/structure/word-budget checks and editor UI are still required;
+no publishing HTTP endpoint is exposed yet. Migration 5 adds private review/action
+state without inventing historical approvals or changing legacy public tables.

@@ -79,6 +79,51 @@ impl Session {
         &self.csrf
     }
 }
+
+/// Lock identity before session, matching operator revocation's lock order. The
+/// caller retains these locks through its editorial commit, never across UI work.
+pub(crate) async fn live_principal(
+    tx: &mut Transaction<'_, Postgres>,
+    session: &Session,
+    permission: Permission,
+) -> Result<Principal, AppError> {
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM news.admin_users WHERE id=$1 AND active FOR SHARE",
+    )
+    .bind(session.principal.id())
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|e| AppError::database("editorial_identity", e))?
+    .ok_or(AppError::Forbidden)?;
+    let valid = sqlx::query_scalar::<_,String>("SELECT user_id FROM news.admin_sessions WHERE token_hash=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE")
+        .bind(&session.token_hash).bind(session.principal.id()).fetch_optional(&mut **tx).await.map_err(|e|AppError::database("editorial_session",e))?;
+    if valid.is_none() {
+        return Err(AppError::Forbidden);
+    }
+    let principal = Principal {
+        id: session.principal.id().into(),
+        role: Role::parse(&role).map_err(|_| AppError::InvalidData)?,
+    };
+    principal
+        .require(permission)
+        .map_err(|_| AppError::Forbidden)?;
+    Ok(principal)
+}
+
+pub(crate) async fn record_service_denial(
+    pool: &PgPool,
+    session: &Session,
+) -> Result<(), AppError> {
+    // A stale bearer is not attributed as a freshly authenticated actor.
+    sqlx::query(
+        "INSERT INTO news.admin_audit(subject_id,action) VALUES ($1,'authorization_denied')",
+    )
+    .bind(session.principal.id())
+    .execute(pool)
+    .await
+    .map_err(|e| AppError::database("editorial_denial", e))?;
+    Ok(())
+}
 #[derive(Debug, PartialEq, Eq)]
 pub enum AuthError {
     Unauthenticated,

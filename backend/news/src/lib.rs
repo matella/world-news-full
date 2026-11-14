@@ -2,6 +2,7 @@ pub mod auth;
 pub mod config;
 pub mod content;
 pub mod domain;
+pub mod editorial;
 pub mod error;
 pub mod legacy;
 pub mod persistence;
