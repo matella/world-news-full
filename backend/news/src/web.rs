@@ -2,8 +2,7 @@ use crate::{
     auth::AuthService,
     config::Config,
     content::{
-        ArticleKind, ContentBlock, EditionCursor, PageSize, Revision, SectionBlock, SourceLink,
-        valid_id,
+        ArticleKind, ContentBlock, EditionCursor, PageSize, Revision, SectionBlock, valid_id,
     },
     error::AppError,
     persistence,
@@ -56,7 +55,7 @@ struct Page {
     items: Vec<Item>,
     next: Option<String>,
     article: Option<Revision>,
-    sources: Vec<SourceLink>,
+    evidence: Option<crate::citations::Report>,
     legacy: bool,
 }
 struct Item {
@@ -81,7 +80,7 @@ impl Page {
             items: vec![],
             next: None,
             article: None,
-            sources: vec![],
+            evidence: None,
             legacy: false,
         }
     }
@@ -303,7 +302,7 @@ async fn story(
             page.message = Some("Vous consultez la révision conservée dans une édition. La version actuelle peut être différente.".into());
             page.items.push(Item { title: "Lire la version actuelle".into(), href: Some(path_segment("story", &id)), detail: String::new() });
         }
-        page.sources = repository.sources(&revision.id).await?;
+        page.evidence = Some(crate::citations::Citations::new(state.pool.clone()).public(&revision).await?);
         page.legacy = matches!(
             revision.kind,
             ArticleKind::LegacySummary | ArticleKind::LegacySynthesis

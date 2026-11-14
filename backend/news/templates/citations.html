@@ -1,0 +1,20 @@
+{% if let Some(report) = evidence %}
+<section aria-labelledby="sources" lang="fr"><h2 id="sources">Sources et références</h2>
+<p>{{ report.documents }} document(s) distinct(s) · {{ report.outlets }} média(s) déclaré(s) · {{ report.documented_origins }} origine(s) de reportage documentée(s).</p>
+<p>Les documents sont distingués par leur URL après retrait des paramètres de suivi connus. Les médias sont les fiches de source citées ; plusieurs médias peuvent reprendre une même dépêche. Les origines documentées sont les groupes de reportage attribués, sans garantie d’indépendance ni de vérité.</p>
+<p>{{ report.unknown_documents }} document(s) d’origine inconnue · {{ report.conflicting_documents }} d’origine contestée. Ces documents n’ajoutent pas une origine certaine au décompte.</p>
+{% if let Some(statement) = report.metadata.statement %}<h3>{{ statement.mode.label() }}</h3><p>{{ statement.attribution }}</p>{% if let Some(limits) = statement.limits %}<p><strong>Limites :</strong> {{ limits }}</p>{% endif %}{% endif %}
+{% for warning in report.warnings %}<p>{{ warning }}</p>{% endfor %}
+{% if !report.missing_claims.is_empty() %}<p>Affirmations à documenter : {% for id in report.missing_claims %}<a href="#claim-{{ id }}">{{ id }}</a> {% endfor %}</p>{% endif %}
+{% if report.citations.is_empty() %}<p>Aucune référence externe disponible pour cette révision.</p>{% else %}
+<ol>{% for citation in report.citations %}<li id="reference-{{ citation.number }}"><a href="{{ citation.original_url }}" rel="noopener noreferrer">{{ citation.source_name }}</a>
+{% if let Some(id) = citation.anchor_id %} · <a href="#claim-{{ id }}">Affirmation {{ id }}</a>{% else %} · Référence générale, sans correspondance précise attestée{% endif %}
+{% if let Some(location) = citation.location %}<p>Passage : {{ location }}</p>{% endif %}
+<p>{{ citation.origin_label() }}.{% for origin in citation.origins() %} {{ origin.name }}.{% endfor %}</p>
+{% if let Some(basis) = citation.origin_basis %}<p>Attribution conservée : {{ basis }}</p>{% endif %}
+</li>{% endfor %}</ol>{% endif %}
+{% if !report.metadata.firsthand.is_empty() %}<h3>Méthodes originales déclarées</h3><ul>{% for method in report.metadata.firsthand %}<li>{{ method.method.label() }} : {{ method.attribution }}{% for id in method.claim_ids %} · <a href="#claim-{{ id }}">{{ id }}</a>{% endfor %}</li>{% endfor %}</ul>{% endif %}
+{% if !report.metadata.disagreements.is_empty() %}<h3>Positions contradictoires attribuées</h3>{% for disagreement in report.metadata.disagreements %}<h4>{{ disagreement.subject }}</h4><ul>{% for position in disagreement.positions %}<li>{{ position.attribution }} : <a href="#claim-{{ position.claim_id }}">consulter l’affirmation et ses références</a></li>{% endfor %}</ul>{% endfor %}{% endif %}
+<p>Une référence atteste l’attribution d’une affirmation, pas sa véracité. Le contrôle éditorial reste humain.</p>
+</section>
+{% endif %}

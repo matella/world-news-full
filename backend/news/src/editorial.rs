@@ -102,6 +102,7 @@ pub struct RevisionInput {
     pub topics: Vec<String>,
     pub geography: Vec<String>,
     pub reason: String,
+    pub evidence: Option<crate::sourcing::SourcePackage>,
 }
 impl RevisionInput {
     fn validate(&self) -> Result<(), AppError> {
@@ -124,6 +125,9 @@ impl RevisionInput {
             return Err(AppError::Validation(
                 "Invalid revision content or change reason.",
             ));
+        }
+        if let Some(package) = &self.evidence {
+            package.validate(&self.body, self.kind)?;
         }
         Ok(())
     }
@@ -225,6 +229,32 @@ impl EditorialService {
         finish(tx, &head, &revision, &actor, "revised", reason).await
     }
 
+    /// Source-only changes retain authored prose/provenance and create a fresh review candidate.
+    pub async fn source_revision(
+        &self,
+        session: &Session,
+        id: &str,
+        expected: i64,
+        package: crate::sourcing::SourcePackage,
+        reason: &str,
+    ) -> Result<Head, AppError> {
+        check_id(id)?;
+        check_reason(reason)?;
+        let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
+        let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.public_state == PublicState::Withdrawn {
+            return Err(AppError::Conflict);
+        }
+        let old = load_revision(&mut tx, &head.current_revision_id).await?;
+        package.validate(&old.body, old.kind)?;
+        let sourcing = serde_json::json!({"schema":1,"package":package});
+        let revision:String=sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT story_id,number+1,title,standfirst,summary,body,language,format,kind,topics,geography,$3,$4,provenance || jsonb_build_object('sourcing',$5::jsonb,'sourcing_previous_revision',id) FROM news.story_revisions WHERE story_id=$1 AND id=$2 RETURNING id")
+            .bind(id).bind(&old.id).bind(actor.id()).bind(reason).bind(Json(sourcing)).fetch_one(&mut *tx).await.map_err(|e|AppError::database("sourcing_revision",e))?;
+        crate::sourcing::attach(&mut tx, &revision, &package).await?;
+        sqlx::query("UPDATE news.stories SET current_revision_id=$2,review_state='draft',state=CASE WHEN published_revision_id IS NULL THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
+            .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("sourcing_head",e))?;
+        finish(tx, &head, &revision, &actor, "revised", reason).await
+    }
     pub async fn submit(
         &self,
         session: &Session,
@@ -307,7 +337,32 @@ impl EditorialService {
         check_id(id)?;
         check_reason(public_reason)?;
         let (mut tx, actor) = self.begin(session, Permission::Publish).await?;
+        sqlx::query("SET LOCAL lock_timeout='1s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::database("publication_lock_timeout", e))?;
+        sqlx::query("SET LOCAL statement_timeout='5s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::database("publication_timeout", e))?;
+        let candidate: Option<String> =
+            sqlx::query_scalar("SELECT current_revision_id FROM news.stories WHERE id=$1")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| AppError::database("publication_candidate", e))?
+                .flatten();
+        let candidate = candidate.ok_or(AppError::NotFound)?;
+        sqlx::query("SELECT news.lock_citation_evidence($1)")
+            .bind(&candidate)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::database("publication_evidence_lock", e))?;
         let head = load_head(&mut tx, id, Some(expected)).await?;
+        if head.current_revision_id != candidate {
+            return Err(AppError::Conflict);
+        }
+
         if head.public_state == PublicState::Withdrawn
             || head.review_state != ReviewState::Approved
             || head.published_revision_id.as_deref() == Some(&head.current_revision_id)
@@ -319,6 +374,8 @@ impl EditorialService {
         if approved.as_deref() != Some("approved") {
             return Err(AppError::Conflict);
         }
+        let revision = load_revision(&mut tx, &head.current_revision_id).await?;
+        crate::citations::publication_check(&mut tx, &revision).await?;
         let action = if head.published_revision_id.is_some() {
             "corrected"
         } else {
@@ -488,9 +545,16 @@ async fn insert_revision(
     actor: &Principal,
     input: RevisionInput,
 ) -> Result<String, AppError> {
-    sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT $1,COALESCE(MAX(number),0)+1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'{\"workflow\":\"editorial\",\"origin\":\"manual_submission\",\"body_schema\":2}'::jsonb FROM news.story_revisions WHERE story_id=$1 RETURNING id")
-        .bind(id).bind(input.title).bind(input.standfirst).bind(input.summary).bind(Json(input.body)).bind(input.language).bind(input.format.as_str()).bind(input.kind.as_str()).bind(input.topics).bind(input.geography).bind(actor.id()).bind(input.reason)
-        .fetch_one(&mut **tx).await.map_err(|e|AppError::database("editorial_save_revision",e))
+    let evidence = input.evidence;
+    let provenance = serde_json::json!({"workflow":"editorial","origin":"manual_submission","body_schema":2,
+        "sourcing":evidence.as_ref().map(|p|serde_json::json!({"schema":1,"package":p}))});
+    let revision:String=sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT $1,COALESCE(MAX(number),0)+1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13 FROM news.story_revisions WHERE story_id=$1 RETURNING id")
+        .bind(id).bind(input.title).bind(input.standfirst).bind(input.summary).bind(Json(input.body)).bind(input.language).bind(input.format.as_str()).bind(input.kind.as_str()).bind(input.topics).bind(input.geography).bind(actor.id()).bind(input.reason).bind(Json(provenance))
+        .fetch_one(&mut **tx).await.map_err(|e|AppError::database("editorial_save_revision",e))?;
+    if let Some(package) = evidence {
+        crate::sourcing::attach(tx, &revision, &package).await?;
+    }
+    Ok(revision)
 }
 async fn action(
     tx: &mut Transaction<'_, Postgres>,

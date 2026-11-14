@@ -127,6 +127,15 @@ def main():
             origins_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{origins_database}")
             subprocess.run(["cargo","test","-p","world-news","--locked","--test","origins","--","--ignored","--test-threads=1"],cwd=ROOT,env=origins_env,check=True)
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+origins_database)
+        if (ROOT/"backend/news/tests/citations.rs").is_file():
+            citations_database=database+"_citations"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+citations_database)
+            citations_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{citations_database}")
+            subprocess.run(["cargo","test","-p","world-news","--locked","--test","citations","--","--ignored","--test-threads=1"],cwd=ROOT,env=citations_env,check=True)
+            if os.environ.get("WORLDNEWS_BROWSER_CHECK") == "1":
+                from test_citations import exercise as exercise_citations
+                exercise_citations(ROOT/"target/debug/world-news",f"postgres://fixture_citation_reader:synthetic-citation-reader@127.0.0.1:{port}/{citations_database}")
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+citations_database)
         if (ROOT/"backend/news/tests/structured_content.rs").is_file():
             structured_database=database+"_structured"
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+structured_database)

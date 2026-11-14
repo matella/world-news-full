@@ -45,6 +45,7 @@ struct View {
     forms: Vec<FormSpec>,
     next: Option<String>,
     article: Option<Revision>,
+    evidence: Option<crate::citations::Report>,
 }
 struct Link {
     label: String,
@@ -159,6 +160,7 @@ fn page(state: &AppState, session: &Session, title: impl Into<String>) -> View {
         forms: vec![],
         next: None,
         article: None,
+        evidence: None,
     }
 }
 fn publisher(session: &Session) -> bool {
@@ -1063,6 +1065,7 @@ async fn view_draft(
         }
         fields.push(field("reason", "Motif du classement", "", "textarea", true));
         v.forms.push(FormSpec {title:"Classer cette version".into(), action:action("drafts", &id, "classification"), button:"Enregistrer le classement dans une nouvelle version".into(), fields});
+        v.evidence=Some(crate::citations::Citations::new(pool(&state)?).private(&session,&revision).await?);
         v.article=Some(revision);
 
         Ok(v)
@@ -1709,6 +1712,7 @@ async fn draft(
         let original = OriginalDraft {
             id: story.clone(),
             input: RevisionInput {
+                evidence: None,
                 title: input.title,
                 standfirst: None,
                 summary: None,

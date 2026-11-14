@@ -39,8 +39,9 @@ per source article, and reviewed/published citation changes require a new revisi
 and `origins_current`. Private notes/actors are excluded. Currentness becomes false
 after a newer assertion or origin disable; old published snapshots stay readable.
 Two outlets sharing one documented origin count as two outlets and one origin,
-never two independent reports. Unknown/conflicting states remain explicit. Reader
-count definitions and complete publication acceptance remain follow-up work in #27.
+never two independent reports. Unknown/conflicting states remain explicit. The
+versioned claim package, count definitions, reader report and sourcing publication
+gate are documented in docs/citation-policy.md. Word/editor gates remain separate.
 
 ## Authority and verification
 

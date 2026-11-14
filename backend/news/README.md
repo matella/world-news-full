@@ -238,3 +238,15 @@ completed work; durable leases remain recoverable. No worker starts with the web
 server. See [policy/operations](../../docs/intake-worker.md) and
 [ADR 0012](../../docs/architecture/0012-bounded-intake-worker.md). Live scheduling,
 identities, source selection and release remain explicit environment decisions.
+
+## Claim attribution and publication
+
+See [citation policy](../../docs/citation-policy.md) and ADR 0018. New publication
+requires reviewed revision-bound sourcing; drafts may remain incomplete. Explicit
+source packages support claim/source locations, human original-method evidence and
+attributed disagreements. Source-only edits create a candidate and reset approval;
+prose edits without a package do not inherit citations. Reader/private reports share
+count definitions and escaped footnotes, never private evidence notes. There is
+still no publishing HTTP endpoint before word/editor acceptance. Migration 16
+requires the documented narrow publisher read/helper grants in an approved release;
+no live migration/grant change follows from the source implementation.

@@ -1,0 +1,1 @@
+{% if let Some(report) = evidence %}{% for citation in report.for_claim(id) %} <sup><a href="#reference-{{ citation.number }}" aria-label="Source {{ citation.number }} de cette affirmation">[{{ citation.number }}]</a></sup>{% endfor %}{% endif %}
