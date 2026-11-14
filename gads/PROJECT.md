@@ -33,6 +33,10 @@ URL payload logging, production private-address escape or ambient credential pro
 Preserve normalization observations and original links; never use a headline or parser
 ID as an article identity. Keep changed metadata for review without rewriting existing
 articles. Configured origin links do not certify article origins.
+Only extract within documented source storage rights and an origin-scoped SafeHttp
+request; recheck rights/session/version after network work. Keep retained publisher
+text separate from immutable provenance so revoked storage can remove the text.
+Manual notes/original drafts are separately authored, never automatic text copies.
 Persist metadata before advancing feed validators; fetch status is not publication
 or whole-pipeline success. Do not add a startup polling loop before job/recovery gates.
 

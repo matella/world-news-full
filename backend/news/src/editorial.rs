@@ -162,24 +162,7 @@ impl EditorialService {
         check_id(id)?;
         input.validate()?;
         let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
-        sqlx::query("INSERT INTO news.stories(id) VALUES ($1)")
-            .bind(id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| AppError::database("editorial_create", e))?;
-        let revision = insert_revision(&mut tx, id, &actor, input).await?;
-        sqlx::query("UPDATE news.stories SET current_revision_id=$2,lock_version=1,updated_at=now() WHERE id=$1").bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_create_head",e))?;
-        action(
-            &mut tx,
-            id,
-            &revision,
-            &actor,
-            "created",
-            "Initial draft created.",
-            1,
-        )
-        .await?;
-        let head = load_head(&mut tx, id, None).await?;
+        let head = create_in_transaction(&mut tx, &actor, id, input).await?;
         tx.commit()
             .await
             .map_err(|e| AppError::database("editorial_commit", e))?;
@@ -414,6 +397,36 @@ fn check_reason(reason: &str) -> Result<(), AppError> {
             "A nonempty public reason of at most 2000 characters is required.",
         ))
     }
+}
+/// Shared creation for atomic manual intake. Caller must hold live identity/session
+/// locks from begin_authorised; this never changes publication state.
+pub(crate) async fn create_in_transaction(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: &Principal,
+    id: &str,
+    input: RevisionInput,
+) -> Result<Head, AppError> {
+    check_id(id)?;
+    input.validate()?;
+    sqlx::query("INSERT INTO news.stories(id) VALUES ($1)")
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| AppError::database("editorial_create", e))?;
+    let revision = insert_revision(tx, id, actor, input).await?;
+    sqlx::query("UPDATE news.stories SET current_revision_id=$2,lock_version=1,updated_at=now() WHERE id=$1").bind(id).bind(&revision).execute(&mut **tx).await.map_err(|e|AppError::database("editorial_create_head",e))?;
+    action(
+        tx,
+        id,
+        &revision,
+        actor,
+        "created",
+        "Initial draft created.",
+        1,
+    )
+    .await?;
+    let head = load_head(tx, id, None).await?;
+    Ok(head)
 }
 async fn load_head(
     tx: &mut Transaction<'_, Postgres>,
