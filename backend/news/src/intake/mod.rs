@@ -1,4 +1,5 @@
 pub mod article;
+pub mod extraction_jobs;
 pub mod feed;
 pub mod feed_admin;
 pub mod http;

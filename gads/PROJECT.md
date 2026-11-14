@@ -43,6 +43,9 @@ Use separate worker DB authority, never a fabricated/permanent editor session.
 Normalization jobs must fence writes and acknowledge success in the same transaction
 as their content receipt. Preserve attempts/generations and audit manual replay.
 The explicit normalization worker does not authorize fetch/extraction scheduling.
+Machine extraction requires a one-hour publisher grant with current issuer/rights/
+version/lease checks. Snapshot origin is human actor XOR worker job; never fabricate
+a human actor or persist a session for machine work. Share source retry minimums.
 Feed completion must hold a live attempt fence and atomically enqueue normalization
 before cache advancement. Recover abandoned attempts explicitly; never reset leases
 silently. Preserve Retry-After minimums and unknown historical holds across resume.

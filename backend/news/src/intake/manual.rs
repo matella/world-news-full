@@ -57,7 +57,8 @@ pub struct IntakeRecord {
     pub version: i64,
     pub kind: String,
     pub error_category: Option<String>,
-    pub actor_id: String,
+    pub actor_id: Option<String>,
+    pub worker_job_id: Option<i64>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 pub struct Snapshot {
@@ -66,18 +67,18 @@ pub struct Snapshot {
     pub extracted: Option<Extracted>,
     pub text_withheld: bool,
 }
-struct Context {
-    source_id: String,
-    source_version: i64,
+pub(crate) struct Context {
+    pub(crate) source_id: String,
+    pub(crate) source_version: i64,
     spec: SourceSpec,
-    url: String,
-    version: i64,
+    pub(crate) url: String,
+    pub(crate) version: i64,
 }
 impl Context {
     fn storage_allowed(&self) -> bool {
         self.spec.validate().is_ok() && self.spec.effective_storage() != StoragePolicy::MetadataOnly
     }
-    fn may_fetch(&self) -> bool {
+    pub(crate) fn may_fetch(&self) -> bool {
         self.spec.enabled
             && self.storage_allowed()
             && crate::registry::registry_url(&self.url)
@@ -115,14 +116,19 @@ impl IntakeService {
     ) -> Result<IntakeHead, AppError> {
         let (mut tx, actor) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
         let context = context(&mut tx, id, Some(expected)).await?;
-        if !context.may_fetch() {
+        let rights_allowed = context.may_fetch();
+        if !rights_allowed || !retry_allowed(&mut tx, &context.source_id).await? {
             save(
                 &mut tx,
                 &actor,
                 id,
                 &context,
                 "denied",
-                Some("rights_or_scope_denied"),
+                Some(if rights_allowed {
+                    "source_retry_wait"
+                } else {
+                    "rights_or_scope_denied"
+                }),
                 None,
                 None,
             )
@@ -147,11 +153,15 @@ impl IntakeService {
         }
         let (mut tx, actor) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
         let current = context_for_completion(&mut tx, id, expected, &context).await?;
+        let hint = match &extracted {
+            Err(ExtractionError::Fetch(FetchError::HttpStatus(_, hint))) => *hint,
+            _ => None,
+        };
         let (kind, error, data) = match extracted {
             Ok(data) => ("extracted", None, Some(data)),
             Err(e) => ("failed", Some(e.category()), None),
         };
-        save(
+        let snapshot = save(
             &mut tx,
             &actor,
             id,
@@ -162,6 +172,9 @@ impl IntakeService {
             None,
         )
         .await?;
+        if let Some(seconds) = hint {
+            record_retry(&mut tx, &current.source_id, None, Some(snapshot), seconds).await?;
+        }
         let head = load_head(&mut tx, id).await?;
         tx.commit().await.map_err(db)?;
         Ok(head)
@@ -264,7 +277,7 @@ impl IntakeService {
         }
         let (mut tx, _) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
         load_head(&mut tx, id).await?;
-        let rows=sqlx::query_as::<_,IntakeRecord>("SELECT id,version,kind,error_category,actor_id,created_at FROM news.intake_snapshots WHERE source_article_id=$1 AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT $3").bind(id).bind(before).bind(i64::from(limit.get())).fetch_all(&mut *tx).await.map_err(db)?;
+        let rows=sqlx::query_as::<_,IntakeRecord>("SELECT id,version,kind,error_category,actor_id,worker_job_id,created_at FROM news.intake_snapshots WHERE source_article_id=$1 AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT $3").bind(id).bind(before).bind(i64::from(limit.get())).fetch_all(&mut *tx).await.map_err(db)?;
         tx.commit().await.map_err(db)?;
         Ok(rows)
     }
@@ -276,7 +289,7 @@ impl IntakeService {
     ) -> Result<Snapshot, AppError> {
         let (mut tx, _) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
         let ctx = context(&mut tx, id, None).await?;
-        let record=sqlx::query_as::<_,IntakeRecord>("SELECT id,version,kind,error_category,actor_id,created_at FROM news.intake_snapshots WHERE source_article_id=$1 AND id=$2").bind(id).bind(snapshot).fetch_one(&mut *tx).await.map_err(db)?;
+        let record=sqlx::query_as::<_,IntakeRecord>("SELECT id,version,kind,error_category,actor_id,worker_job_id,created_at FROM news.intake_snapshots WHERE source_article_id=$1 AND id=$2").bind(id).bind(snapshot).fetch_one(&mut *tx).await.map_err(db)?;
         // Do not even select retained publisher text when current rights deny it.
         let (notes,extracted)=sqlx::query_as::<_,(Option<String>,Option<Json<Extracted>>)>("SELECT i.notes,CASE WHEN $3 THEN t.extracted ELSE NULL END FROM news.intake_snapshots i LEFT JOIN news.intake_text t ON t.snapshot_id=i.id WHERE i.source_article_id=$1 AND i.id=$2").bind(id).bind(snapshot).bind(ctx.storage_allowed()).fetch_one(&mut *tx).await.map_err(db)?;
         let text_withheld = record.kind == "extracted" && extracted.is_none();
@@ -325,7 +338,7 @@ async fn source(
     }
     Ok((version, spec))
 }
-async fn context(
+pub(crate) async fn context(
     tx: &mut Transaction<'_, Postgres>,
     id: &str,
     expected: Option<i64>,
@@ -386,6 +399,53 @@ async fn save(
     extracted: Option<&Extracted>,
     notes: Option<&str>,
 ) -> Result<i64, AppError> {
+    save_intake(
+        tx,
+        Some(actor.id()),
+        None,
+        id,
+        ctx,
+        kind,
+        error,
+        extracted,
+        notes,
+    )
+    .await
+}
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn save_worker(
+    tx: &mut Transaction<'_, Postgres>,
+    job: i64,
+    id: &str,
+    ctx: &Context,
+    kind: &str,
+    error: Option<&str>,
+    extracted: Option<&Extracted>,
+) -> Result<i64, AppError> {
+    save_intake(tx, None, Some(job), id, ctx, kind, error, extracted, None).await
+}
+pub(crate) async fn retry_allowed(
+    tx: &mut Transaction<'_, Postgres>,
+    source: &str,
+) -> Result<bool, AppError> {
+    sqlx::query_scalar("SELECT news.extraction_retry_allowed($1)")
+        .bind(source)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db)
+}
+#[allow(clippy::too_many_arguments)]
+async fn save_intake(
+    tx: &mut Transaction<'_, Postgres>,
+    actor: Option<&str>,
+    worker_job: Option<i64>,
+    id: &str,
+    ctx: &Context,
+    kind: &str,
+    error: Option<&str>,
+    extracted: Option<&Extracted>,
+    notes: Option<&str>,
+) -> Result<i64, AppError> {
     let version = ctx.version.checked_add(1).ok_or(AppError::Conflict)?;
     let extraction_metadata = extracted.map(|data| {
         let mut value = serde_json::to_value(data).expect("serializable extraction");
@@ -398,7 +458,11 @@ async fn save(
         value["text_hash"] = json!(digest);
         Json(value)
     });
-    let snapshot=sqlx::query_scalar::<_,i64>("INSERT INTO news.intake_snapshots(source_article_id,version,source_version,actor_id,kind,error_category,policy,extraction_metadata,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id").bind(id).bind(version).bind(ctx.source_version).bind(actor.id()).bind(kind).bind(error).bind(Json(ctx.policy())).bind(extraction_metadata).bind(notes).fetch_one(&mut **tx).await.map_err(db)?;
+    let snapshot = if let Some(job) = worker_job {
+        sqlx::query_scalar::<_,i64>("INSERT INTO news.intake_snapshots(source_article_id,version,source_version,worker_job_id,kind,error_category,policy,extraction_metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id").bind(id).bind(version).bind(ctx.source_version).bind(job).bind(kind).bind(error).bind(Json(ctx.policy())).bind(extraction_metadata).fetch_one(&mut **tx).await.map_err(db)?
+    } else {
+        sqlx::query_scalar::<_,i64>("INSERT INTO news.intake_snapshots(source_article_id,version,source_version,actor_id,kind,error_category,policy,extraction_metadata,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id").bind(id).bind(version).bind(ctx.source_version).bind(actor).bind(kind).bind(error).bind(Json(ctx.policy())).bind(extraction_metadata).bind(notes).fetch_one(&mut **tx).await.map_err(db)?
+    };
     if let Some(data) = extracted {
         sqlx::query("INSERT INTO news.intake_text(snapshot_id,extracted) VALUES($1,$2)")
             .bind(snapshot)
@@ -412,6 +476,16 @@ async fn save(
         return Err(AppError::Conflict);
     }
     Ok(snapshot)
+}
+pub(crate) async fn record_retry(
+    tx: &mut Transaction<'_, Postgres>,
+    source: &str,
+    job: Option<i64>,
+    manual_snapshot: Option<i64>,
+    seconds: u64,
+) -> Result<(), AppError> {
+    sqlx::query("INSERT INTO news.source_extraction_limits(source_id,retry_after_seconds,job_id,manual_snapshot_id) VALUES($1,$2,$3,$4) ON CONFLICT(source_id) DO UPDATE SET retry_after_seconds=EXCLUDED.retry_after_seconds,observed_at=EXCLUDED.observed_at,job_id=EXCLUDED.job_id,manual_snapshot_id=EXCLUDED.manual_snapshot_id WHERE news.source_extraction_limits.retry_after_seconds::numeric-extract(epoch FROM clock_timestamp()-news.source_extraction_limits.observed_at)<EXCLUDED.retry_after_seconds::numeric").bind(source).bind(seconds.to_string()).bind(job).bind(manual_snapshot).execute(&mut **tx).await.map_err(db)?;
+    Ok(())
 }
 fn db(error: sqlx::Error) -> AppError {
     AppError::database("article_intake", error)
