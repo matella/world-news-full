@@ -1,7 +1,8 @@
 # Durable normalization operations
 
 This is the first service slice of #21. It operates only on existing durable
-feed_batches. Fetch/extraction jobs and scheduler/daemon activation remain pending.
+feed_batches. Feed attempt recovery/handoff is staged separately in
+[feed operations](feed-recovery.md); machine extraction and scheduler activation remain pending.
 There is no automatic startup work and no publishing authority.
 
 ## Operator API

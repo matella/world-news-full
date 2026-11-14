@@ -40,6 +40,49 @@ async fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
         return Ok(ExitCode::SUCCESS);
     }
     let pool = persistence::pool(&config);
+    if arguments.first().is_some_and(|a| a == "--poll-feed-once")
+        || arguments == ["--recover-feed-leases-once"]
+    {
+        let poller = world_news::intake::poll::FeedPoller::new(pool.clone(), &config.public_url)
+            .map_err(|e| std::io::Error::other(e.category()))?;
+        let report = if arguments == ["--recover-feed-leases-once"] {
+            serde_json::json!({"status":"recovered","attempts":poller.recover_expired().await?})
+        } else {
+            if arguments.len() != 2 {
+                return Err("Usage: world-news --poll-feed-once FEED_ID".into());
+            }
+            use world_news::intake::poll::PollOutcome;
+            match poller.poll_due(&arguments[1]).await? {
+                PollOutcome::Disabled => serde_json::json!({"status":"disabled"}),
+                PollOutcome::Paused => serde_json::json!({"status":"paused"}),
+                PollOutcome::NotDue => serde_json::json!({"status":"not_due"}),
+                PollOutcome::Cancelled => serde_json::json!({"status":"cancelled"}),
+                PollOutcome::LeaseLost => serde_json::json!({"status":"lease_lost"}),
+                PollOutcome::Recovered { attempt_id } => {
+                    serde_json::json!({"status":"recovered","attempt_id":attempt_id})
+                }
+                PollOutcome::Modified {
+                    attempt_id,
+                    entries,
+                } => {
+                    serde_json::json!({"status":"modified","attempt_id":attempt_id,"entries":entries})
+                }
+                PollOutcome::Unchanged { attempt_id } => {
+                    serde_json::json!({"status":"unchanged","attempt_id":attempt_id})
+                }
+                PollOutcome::Failed { attempt_id, error } => {
+                    serde_json::json!({"status":"failed","attempt_id":attempt_id,"error":error.category()})
+                }
+            }
+        };
+        pool.close().await;
+        println!("{}", serde_json::to_string(&report)?);
+        return Ok(if report["status"] == "failed" {
+            ExitCode::from(2)
+        } else {
+            ExitCode::SUCCESS
+        });
+    }
     if arguments == ["--work-normalization-once"] {
         let result = world_news::intake::jobs::Queue::new(pool.clone())
             .work_once()

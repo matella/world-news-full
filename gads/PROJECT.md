@@ -43,6 +43,9 @@ Use separate worker DB authority, never a fabricated/permanent editor session.
 Normalization jobs must fence writes and acknowledge success in the same transaction
 as their content receipt. Preserve attempts/generations and audit manual replay.
 The explicit normalization worker does not authorize fetch/extraction scheduling.
+Feed completion must hold a live attempt fence and atomically enqueue normalization
+before cache advancement. Recover abandoned attempts explicitly; never reset leases
+silently. Preserve Retry-After minimums and unknown historical holds across resume.
 
 ## Commands and evidence
 
@@ -53,6 +56,7 @@ The explicit normalization worker does not authorize fetch/extraction scheduling
 | Transitional frontend | `cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm run build` (explicit DATABASE_URL required) |
 | Current Rust skeleton | `cargo build --workspace --locked` |
 | New Rust foundation | `cargo run -p world-news -- --check-config`, `cargo run -p world-news` (DATABASE_URL required; default port 3001) |
+| Explicit selected feed / recovery | `world-news --poll-feed-once ID` (can fetch) / `world-news --recover-feed-leases-once` (no HTTP); see docs/feed-recovery.md; no startup scheduler |
 | Explicit normalization worker | `world-news --work-normalization-once` with an isolated worker DATABASE_URL; see docs/normalization-jobs.md; no startup scheduler |
 | Rust process smoke test | `python3 scripts/test_rust_runtime.py` after cargo build |
 | Owned schema integration | `python3 scripts/test_database.py` (creates a disposable local DB; regular cargo test deliberately ignores this opt-in suite) |
