@@ -14,6 +14,8 @@ Initial creation or a text revision can supply an explicitly authored package to
 - Binding: source article ID, optional exact body claim ID and optional plain
   source location (1–2,000 characters). URLs come from the immutable source record.
   Missing anchor means a general reference, never a claimed precise mapping.
+  Optional `origin_version` pins sealed evidence; omission captures current evidence.
+  Stale pinned versions still block publication until explicitly refreshed.
 - Original method: observation, interview or document review; public attribution,
   selected claim IDs and private evidence note. An empty claim list covers whole
   prose only when the body has no formal claim anchors. It cannot silently attest
@@ -39,8 +41,8 @@ One source is sufficient when its limits are explicit; uncertain/contested origi
 also require a public limitation note. There is no ten-source quota or truth score.
 
 Historical mode is limited to preserved imported Jarvis lineage and historical
-article kinds, with explicit unverified limitations. It permits transparent archive
-metadata corrections, not relabelling newly written reporting as a legacy import.
+article kinds, with explicit unverified limitations. It permits transparent corrections of a genuine imported archive while preserving
+its historical identity, not relabelling new reporting as a legacy import.
 Existing archived publications remain readable with incomplete attribution warnings.
 
 Draft/review can retain missing evidence so editors can finish work. The private

@@ -107,6 +107,9 @@ pub struct RevisionInput {
 }
 impl RevisionInput {
     fn validate(&self) -> Result<(), AppError> {
+        self.validate_content(false)
+    }
+    fn validate_content(&self, historical: bool) -> Result<(), AppError> {
         let metadata =
             |values: &[String]| values.len() <= 20 && values.iter().all(|v| text(v, 100));
         if !text(&self.title, 500)
@@ -118,10 +121,11 @@ impl RevisionInput {
             || !metadata(&self.topics)
             || !metadata(&self.geography)
             || !text(&self.reason, 2000)
-            || matches!(
-                self.kind,
-                ArticleKind::LegacySummary | ArticleKind::LegacySynthesis
-            )
+            || (!historical
+                && matches!(
+                    self.kind,
+                    ArticleKind::LegacySummary | ArticleKind::LegacySynthesis
+                ))
         {
             return Err(AppError::Validation(
                 "Invalid revision content or change reason.",
@@ -191,14 +195,44 @@ impl EditorialService {
         input: RevisionInput,
     ) -> Result<Head, AppError> {
         check_id(id)?;
-        input.validate()?;
+        input.validate_content(true)?;
         let reason = input.reason.clone();
         let (mut tx, actor) = self.begin(session, Permission::Edit).await?;
         let head = load_head(&mut tx, id, Some(expected)).await?;
         if head.public_state == PublicState::Withdrawn {
             return Err(AppError::Conflict);
         }
-        let revision = insert_revision(&mut tx, id, &actor, input, &self.policy).await?;
+        let old = load_revision(&mut tx, &head.current_revision_id).await?;
+        let mut provenance: serde_json::Value =
+            sqlx::query_scalar("SELECT provenance FROM news.story_revisions WHERE id=$1")
+                .bind(&old.id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| AppError::database("revision_lineage", e))?;
+        let historical = matches!(
+            old.kind,
+            ArticleKind::LegacySummary | ArticleKind::LegacySynthesis
+        );
+        if (historical && (input.kind != old.kind || provenance["pipeline"] != "legacy_jarvis"))
+            || (!historical
+                && matches!(
+                    input.kind,
+                    ArticleKind::LegacySummary | ArticleKind::LegacySynthesis
+                ))
+        {
+            return Err(AppError::Validation(
+                "Historical edits must preserve genuine archive lineage and kind.",
+            ));
+        }
+        if input.topics != old.topics || input.geography != old.geography {
+            provenance
+                .as_object_mut()
+                .ok_or(AppError::InvalidData)?
+                .remove("classification");
+        }
+        provenance["edited_from"] = serde_json::json!(old.id);
+        let revision =
+            insert_revision(&mut tx, id, &actor, input, &self.policy, Some(provenance)).await?;
         sqlx::query("UPDATE news.stories SET current_revision_id=$2,review_state='draft',state=CASE WHEN published_revision_id IS NULL THEN 'draft' ELSE state END,lock_version=lock_version+1,updated_at=now() WHERE id=$1")
             .bind(id).bind(&revision).execute(&mut *tx).await.map_err(|e|AppError::database("editorial_revise",e))?;
         finish(tx, &head, &revision, &actor, "revised", &reason).await
@@ -571,7 +605,7 @@ pub(crate) async fn create_in_transaction(
         .execute(&mut **tx)
         .await
         .map_err(|e| AppError::database("editorial_create", e))?;
-    let revision = insert_revision(tx, id, actor, input, policy).await?;
+    let revision = insert_revision(tx, id, actor, input, policy, None).await?;
     sqlx::query("UPDATE news.stories SET current_revision_id=$2,lock_version=1,updated_at=now() WHERE id=$1").bind(id).bind(&revision).execute(&mut **tx).await.map_err(|e|AppError::database("editorial_create_head",e))?;
     action(
         tx,
@@ -613,6 +647,7 @@ async fn insert_revision(
     actor: &Principal,
     input: RevisionInput,
     policy: &crate::domain::EditorialPolicy,
+    previous_provenance: Option<serde_json::Value>,
 ) -> Result<String, AppError> {
     let length = crate::length::Assessment::new(
         &input.body,
@@ -622,8 +657,15 @@ async fn insert_revision(
         input.length_override,
     )?;
     let evidence = input.evidence;
-    let provenance = serde_json::json!({"workflow":"editorial","origin":"manual_submission","body_schema":2,"length":length,
-        "sourcing":evidence.as_ref().map(|p|serde_json::json!({"schema":1,"package":p}))});
+    let mut provenance = previous_provenance.unwrap_or_else(
+        || serde_json::json!({"workflow":"editorial","origin":"manual_submission"}),
+    );
+    provenance["body_schema"] = serde_json::json!(2);
+    provenance["length"] = serde_json::to_value(length).map_err(|_| AppError::InvalidData)?;
+    provenance["sourcing"] = evidence
+        .as_ref()
+        .map(|p| serde_json::json!({"schema":1,"package":p}))
+        .unwrap_or(serde_json::Value::Null);
     let revision:String=sqlx::query_scalar("INSERT INTO news.story_revisions(story_id,number,title,standfirst,summary,body,language,format,kind,topics,geography,actor_id,change_reason,provenance) SELECT $1,COALESCE(MAX(number),0)+1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13 FROM news.story_revisions WHERE story_id=$1 RETURNING id")
         .bind(id).bind(input.title).bind(input.standfirst).bind(input.summary).bind(Json(input.body)).bind(input.language).bind(input.format.as_str()).bind(input.kind.as_str()).bind(input.topics).bind(input.geography).bind(actor.id()).bind(input.reason).bind(Json(provenance))
         .fetch_one(&mut **tx).await.map_err(|e|AppError::database("editorial_save_revision",e))?;
@@ -681,3 +723,6 @@ async fn finish(
         .map_err(|e| AppError::database("editorial_commit", e))?;
     Ok(updated)
 }
+
+mod workbench;
+pub use workbench::{DraftCard, DraftCursor, DraftFilter, DraftPage, EvidenceDraft};

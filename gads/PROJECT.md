@@ -117,6 +117,15 @@ reason rescues zero-word content. Public reasons are intentionally public, actor
 revision-change notes are not. Private counter/range forms use existing role/session/
 version/CSRF/Origin checks. Complete article editing/publication UI remains #29.
 
+Private workbench reads use live sessions and bounded keyset pages; do not replace
+missing revision data with successful empty content. Evidence proposals from a
+same-story parent are unattached, never restored approval. Preserve captured origin
+versions until an explicit refresh; omitted binding versions capture current state.
+Text corrections retain original provenance and parent identity but replace sourcing
+and length assessment. Genuine archive edits retain historical kind/import lineage;
+never create a fake import or silently relabel an archive as new reporting. See
+docs/editor-workbench.md. The complete #29 UI and publication journey remain open.
+
 ## Commands and evidence
 
 | Purpose | Command from repository root |

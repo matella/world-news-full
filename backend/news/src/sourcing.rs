@@ -66,6 +66,8 @@ pub struct PublicFirsthand {
 #[serde(deny_unknown_fields)]
 pub struct Binding {
     pub source_article_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_version: Option<i64>,
     pub anchor_id: Option<String>,
     pub location: Option<String>,
 }
@@ -131,9 +133,14 @@ impl SourcePackage {
                 !text(&s.attribution, 2000)
                     || s.limits.as_ref().is_some_and(|v| !text(v, 2000))
                     || (s.mode == SourceMode::Opinion && kind != ArticleKind::Opinion)
+                    || (matches!(
+                        kind,
+                        ArticleKind::LegacySummary | ArticleKind::LegacySynthesis
+                    ) && s.mode != SourceMode::Historical)
             })
             || self.bindings.iter().any(|b| {
-                !valid_id(&b.source_article_id)
+                b.origin_version.is_some_and(|v| v < 0)
+                    || !valid_id(&b.source_article_id)
                     || b.anchor_id
                         .as_deref()
                         .is_some_and(|id| !claims.contains(id))
@@ -190,8 +197,8 @@ pub(crate) async fn attach(
             .as_ref()
             .map(|id| format!("claim:{id}"))
             .unwrap_or_else(|| "general".into());
-        sqlx::query("INSERT INTO news.citations(revision_id,claim_id,source_article_id,anchor_id,location) VALUES($1,$2,$3,$4,$5)")
-            .bind(revision).bind(key).bind(&binding.source_article_id).bind(&binding.anchor_id).bind(&binding.location)
+        sqlx::query("INSERT INTO news.citations(revision_id,claim_id,source_article_id,anchor_id,location,origin_version) VALUES($1,$2,$3,$4,$5,$6)")
+            .bind(revision).bind(key).bind(&binding.source_article_id).bind(&binding.anchor_id).bind(&binding.location).bind(binding.origin_version)
             .execute(&mut **tx).await.map_err(|e|AppError::database("sourcing_bindings",e))?;
     }
     Ok(())
@@ -217,6 +224,7 @@ mod tests {
         let mut p = SourcePackage::default();
         assert!(p.validate(&body(), ArticleKind::Reporting).is_ok());
         p.bindings.push(Binding {
+            origin_version: None,
             source_article_id: "source".into(),
             anchor_id: Some("missing".into()),
             location: None,
@@ -238,11 +246,15 @@ mod tests {
         });
         assert!(p.validate(&body(), ArticleKind::Reporting).is_err());
         p.bindings.push(Binding {
+            origin_version: None,
             source_article_id: "source-two".into(),
             anchor_id: Some("two".into()),
             location: Some("Page 2".into()),
         });
         assert!(p.validate(&body(), ArticleKind::Reporting).is_ok());
+        p.bindings[0].origin_version = Some(-1);
+        assert!(p.validate(&body(), ArticleKind::Reporting).is_err());
+        p.bindings[0].origin_version = None;
         p.bindings.push(p.bindings[0].clone());
         assert!(p.validate(&body(), ArticleKind::Reporting).is_err());
     }
@@ -262,6 +274,17 @@ mod tests {
             !serde_json::to_string(&p.public())
                 .unwrap()
                 .contains("PRIVATE-MARKER")
+        );
+        let mut historical = p.clone();
+        historical.statement = Some(SourceStatement {
+            mode: SourceMode::Original,
+            attribution: "Cannot relabel an archive as newly original".into(),
+            limits: Some("Historical archive".into()),
+        });
+        assert!(
+            historical
+                .validate(&body(), ArticleKind::LegacySummary)
+                .is_err()
         );
         let mut bad = p.clone();
         bad.firsthand[0].claim_ids.clear();
