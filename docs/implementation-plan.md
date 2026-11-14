@@ -196,3 +196,13 @@ disagreements. It uses immutable source-only revisions, pinned proof versions,
 explicit capture after document changes, bounded choices and stale-input recovery.
 See ADR 0022 and docs/editor-sources.md. Publisher origin/thread controls and the
 full workflow remain open; no HTTP publication or live release is introduced.
+
+## Human article-origin controls
+
+PR #79 is merged at 84c7903d5c364d9dab42ec85db49da5905b00c63 after all workflows
+passed. The next #29 slice adds actual current-evidence reads, publisher assertion
+forms, retained/paged origin choices, immutable private details/history and stale
+input recovery. New assertions require fresh private justification and retain
+existing citation snapshots. See ADR 0023 and docs/article-origins.md. No schema,
+provider, HTTP article-publication or live change is introduced. Origin registry/
+thread administration and the complete editorial publication journey remain open.

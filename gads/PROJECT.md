@@ -200,3 +200,14 @@ infer proof from metadata. Separate public attribution/limits from private notes
 Bound document/claim choices while retaining current selections, reject stale saves
 and preserve submitted recovery input. Source forms add no HTTP publication gate
 bypass; publisher origin/thread controls and full #29 acceptance remain required.
+
+## Article-origin controls
+
+Follow ADR 0023 and docs/article-origins.md. Current evidence is the real sealed
+article pointer/version, not a registry inference or newest visible history row.
+Publisher-only assertions require fresh private justification, exact versions and
+live role/CSRF/Origin checks. Choice paging is nonpersistent; stale/invalid saves
+preserve private input only after reauthorisation. Never copy old private notes
+into automatic human attestations, refresh existing citations implicitly or expose
+private proof/actors through reader views. Registry/thread administration and full
+publication acceptance remain #29 gates; this screen does not publish articles.

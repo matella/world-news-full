@@ -28,7 +28,7 @@ fn config(reader: &str, writer: Option<&str>) -> Config {
     })
     .unwrap()
 }
-async fn login(app: &Router, auth: &AuthService, user: &str) -> Session {
+async fn login(app: &Router, auth: &AuthService, user: &str) -> (Session, String) {
     let body = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("username", user)
         .append_pair("password", PASSWORD)
@@ -59,7 +59,76 @@ async fn login(app: &Router, auth: &AuthService, user: &str) -> Session {
         .join("; ");
     let mut headers = HeaderMap::new();
     headers.insert(header::COOKIE, cookies.parse().unwrap());
-    auth.authenticate(&headers).await.unwrap()
+    (auth.authenticate(&headers).await.unwrap(), cookies)
+}
+async fn http(
+    app: &Router,
+    method: &str,
+    path: &str,
+    cookie: Option<&str>,
+    origin: bool,
+    fields: &std::collections::BTreeMap<String, String>,
+) -> axum::response::Response {
+    let mut builder = Request::builder().method(method).uri(path);
+    if let Some(cookie) = cookie {
+        builder = builder.header(header::COOKIE, cookie);
+    }
+    if origin {
+        builder = builder.header(header::ORIGIN, "https://news.invalid");
+    }
+    let body = url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(fields)
+        .finish();
+    app.clone()
+        .oneshot(
+            builder
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+async fn text(response: axum::response::Response) -> String {
+    String::from_utf8(
+        http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .unwrap()
+            .to_bytes()
+            .to_vec(),
+    )
+    .unwrap()
+}
+fn form(html: &str) -> std::collections::BTreeMap<String, String> {
+    let doc = html_scraper::Html::parse_document(html);
+    let selector = html_scraper::Selector::parse("form[action^='/admin/editor/source/']").unwrap();
+    let form = doc.select(&selector).next().unwrap();
+    let controls =
+        html_scraper::Selector::parse("input[name],textarea[name],select[name]").unwrap();
+    let mut result = std::collections::BTreeMap::new();
+    for c in form.select(&controls) {
+        if c.value().attr("type") == Some("checkbox") && c.value().attr("checked").is_none() {
+            continue;
+        }
+        let value = match c.value().name() {
+            "textarea" => c.text().collect(),
+            "select" => {
+                let options = html_scraper::Selector::parse("option").unwrap();
+                let options: Vec<_> = c.select(&options).collect();
+                options
+                    .iter()
+                    .find(|o| o.value().attr("selected").is_some())
+                    .unwrap_or(&options[0])
+                    .value()
+                    .attr("value")
+                    .unwrap()
+                    .into()
+            }
+            _ => c.value().attr("value").unwrap_or("").into(),
+        };
+        result.insert(c.value().attr("name").unwrap().into(), value);
+    }
+    result
 }
 fn input(state: OriginState, ids: &[&str], note: &str) -> OriginInput {
     OriginInput {
@@ -112,6 +181,7 @@ async fn article_origin_assertions_preserve_unknowns_and_frozen_citation_evidenc
     for (id, role) in [
         ("origin-publisher", Role::Publisher),
         ("origin-editor", Role::Editor),
+        ("origin-browser", Role::Publisher),
     ] {
         auth::bootstrap(&owner, id, role, Zeroizing::new(PASSWORD.into()))
             .await
@@ -138,8 +208,8 @@ async fn article_origin_assertions_preserve_unknowns_and_frozen_citation_evidenc
         writer.clone(),
         &url::Url::parse("https://news.invalid").unwrap(),
     );
-    let publisher = login(&app, &auth, "origin-publisher").await;
-    let editor = login(&app, &auth, "origin-editor").await;
+    let (publisher, publisher_cookie) = login(&app, &auth, "origin-publisher").await;
+    let (editor, editor_cookie) = login(&app, &auth, "origin-editor").await;
     let evidence = OriginEvidence::new(writer.clone());
     assert!(matches!(
         evidence
@@ -361,6 +431,163 @@ async fn article_origin_assertions_preserve_unknowns_and_frozen_citation_evidenc
             .len(),
         1
     );
+    // Real publisher/editor HTTP against the narrow writer, using an isolated source.
+    sqlx::query("INSERT INTO news.source_articles(id,source_id,canonical_key,original_url,title,extraction_state) VALUES('ui-origin','outlet-b','ui-origin','https://b.invalid/ui-origin','Source <script>literal</script>','metadata_only')").execute(&owner).await.unwrap();
+    for i in 0..25 {
+        sqlx::query("INSERT INTO news.reporting_origins(id,name) VALUES($1,$2)")
+            .bind(format!("origin-{i:02}"))
+            .bind(format!("UI origin {i:02}"))
+            .execute(&owner)
+            .await
+            .unwrap();
+    }
+    sqlx::query("INSERT INTO news.citations(revision_id,claim_id,source_article_id) VALUES('invalid-r1','general','ui-origin')").execute(&owner).await.unwrap();
+    let current = evidence.current(&editor, "ui-origin").await.unwrap();
+    assert_eq!(current.version, 0);
+    assert!(current.assertion.is_none());
+    let path = "/admin/editor/source/ui-origin/origins";
+    let empty = std::collections::BTreeMap::new();
+    assert_eq!(
+        http(&app, "GET", path, None, false, &empty).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let editor_html =
+        text(http(&app, "GET", path, Some(&editor_cookie), false, &empty).await).await;
+    assert!(!editor_html.contains("Enregistrer la preuve d’origine</button>"));
+    let html = text(http(&app, "GET", path, Some(&publisher_cookie), false, &empty).await).await;
+    assert!(!html.contains("<script>literal</script>"));
+    let mut fields = form(&html);
+    fields.insert("state".into(), "documented".into());
+    fields.insert(
+        "public_basis".into(),
+        "Public <script>inert attribution</script>".into(),
+    );
+    fields.insert(
+        "private_note".into(),
+        "\nPRIVATE-UI-ORIGIN </textarea><script>inert justification</script>".into(),
+    );
+    fields.insert("origin_0".into(), "yes".into());
+    fields.insert("intent".into(), "page:origin-19".into());
+    let count_before = count(&owner).await;
+    let paged = http(&app, "POST", path, Some(&publisher_cookie), true, &fields).await;
+    assert_eq!(paged.status(), StatusCode::OK);
+    let html = text(paged).await;
+    assert!(html.contains("UI origin 24"));
+    fields = form(&html);
+    assert!(fields["private_note"].starts_with('\n'));
+    assert_eq!(count(&owner).await, count_before);
+    assert_eq!(
+        fields
+            .iter()
+            .filter(|(k, v)| k.starts_with("origin_")
+                && !k.starts_with("origin_id_")
+                && *v == "yes")
+            .count(),
+        1
+    );
+    fields.insert("intent".into(), "save".into());
+    let mut bad = fields.clone();
+    bad.remove("csrf");
+    assert_eq!(
+        http(&app, "POST", path, Some(&publisher_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        http(&app, "POST", path, Some(&publisher_cookie), false, &fields)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let doc = html_scraper::Html::parse_document(&editor_html);
+    let selector = html_scraper::Selector::parse("input[name='csrf']").unwrap();
+    bad.insert(
+        "csrf".into(),
+        doc.select(&selector)
+            .next()
+            .unwrap()
+            .value()
+            .attr("value")
+            .unwrap()
+            .into(),
+    );
+    assert_eq!(
+        http(&app, "POST", path, Some(&editor_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    bad = fields.clone();
+    bad.insert("actor_id".into(), "origin-publisher".into());
+    assert_eq!(
+        http(&app, "POST", path, Some(&publisher_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    bad = fields.clone();
+    bad.insert("state".into(), "unknown".into());
+    let invalid = http(&app, "POST", path, Some(&publisher_cookie), true, &bad).await;
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+    let recovery = text(invalid).await;
+    assert!(recovery.contains("PRIVATE-UI-ORIGIN"));
+    assert!(!recovery.contains("<script>inert justification</script>"));
+    assert_eq!(count(&owner).await, count_before);
+    assert_eq!(
+        http(&app, "POST", path, Some(&publisher_cookie), true, &fields)
+            .await
+            .status(),
+        StatusCode::SEE_OTHER
+    );
+    let proof = evidence.current(&editor, "ui-origin").await.unwrap();
+    assert_eq!(proof.version, 1);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT origin_version FROM news.citations WHERE revision_id='invalid-r1' AND source_article_id='ui-origin'").fetch_one(&owner).await.unwrap(),0);
+    let proof = proof.assertion.unwrap();
+    assert_eq!(proof.evidence.origins[0].id, "origin-00");
+    assert!(proof.private_note.starts_with("\nPRIVATE-UI-ORIGIN"));
+    let detail = format!("/admin/origin-evidence/{}", proof.evidence.id);
+    assert_eq!(
+        http(&app, "GET", &detail, None, false, &empty)
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let html = text(http(&app, "GET", &detail, Some(&editor_cookie), false, &empty).await).await;
+    assert!(html.contains("PRIVATE-UI-ORIGIN"));
+    assert!(!html.contains("<script>inert justification</script>"));
+    let stale = http(&app, "POST", path, Some(&publisher_cookie), true, &fields).await;
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    assert!(text(stale).await.contains("PRIVATE-UI-ORIGIN"));
+    assert_eq!(
+        evidence
+            .current(&editor, "ui-origin")
+            .await
+            .unwrap()
+            .version,
+        1
+    );
+    // Oversized selections remain recoverable for explicit deselection.
+    let mut oversized =
+        form(&text(http(&app, "GET", path, Some(&publisher_cookie), false, &empty).await).await);
+    for i in 0..21 {
+        oversized.insert(format!("origin_id_{i}"), format!("origin-{i:02}"));
+        oversized.insert(format!("origin_{i}"), "yes".into());
+    }
+    oversized.insert("origins".into(), "21".into());
+    oversized.insert("private_note".into(), "Too many selected origins".into());
+    oversized.insert("intent".into(), "save".into());
+    let invalid = http(
+        &app,
+        "POST",
+        path,
+        Some(&publisher_cookie),
+        true,
+        &oversized,
+    )
+    .await;
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(form(&text(invalid).await)["origins"], "21");
     sqlx::query("UPDATE news.admin_sessions SET revoked_at=now() WHERE user_id='origin-publisher'")
         .execute(&owner)
         .await
@@ -376,6 +603,8 @@ async fn article_origin_assertions_preserve_unknowns_and_frozen_citation_evidenc
             .await,
         Err(AppError::Forbidden)
     ));
+    assert!(evidence.current(&publisher, "ui-origin").await.is_err());
+    assert!(evidence.choices(&publisher, &[], None).await.is_err());
     worker.close().await;
     writer.close().await;
     reader.close().await;

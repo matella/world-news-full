@@ -23,7 +23,7 @@ Each assertion is immutable. Concurrent curators must reload after a version
 conflict; a failed pointer change rolls back both assertion and labels. Lock order
 is source, selected origins, then source article, with bounded transaction waits.
 Intake versions do not change. Authenticated editors can read bounded history and
-private details; this is a private service API, not an exposed web route.
+private details. The protected controls below call this private service API.
 
 ## Frozen citations
 
@@ -60,3 +60,33 @@ Docker workspaces, `WORLDNEWS_TEST_PG_TMPFS=1` puts this suite's disposable data
 data on a capped 1 GiB tmpfs. This does not test disk persistence; use the separate
 `scripts/test_persistence.py` drill for that. No existing container/volume is used.
 See docs/evidence/article-origins.md and ADR 0017 for evidence and release limits.
+
+## Protected article-origin controls
+
+From a document’s private intake page, open “Examiner l’origine documentée et ses
+justificatifs” (`/admin/editor/source/{id}/origins`). Editors see the actual current
+version and bounded assertion history. Details at `/admin/origin-evidence/{id}`
+include captured origin labels, the public basis and private supporting notes.
+None of these routes are anonymous reader projections.
+
+A publisher can select up to 20 registered origin identities, choose unknown,
+documented or conflicting state, write a public basis and provide a fresh private
+justification. Unknown state must have no attributed origins; documented state
+requires at least one enabled identity. Disabled identities remain visible for
+resolution but cannot support a new assertion. Registry links never preselect or
+prove article origins. Origin identity administration remains a subsequent #29 gate.
+
+Choice pages preserve selections and typed notes without writing an assertion.
+Invalid oversized selections can be explicitly deselected. New forms do not copy
+old private notes into a new attestation; consult immutable history as needed.
+Saving fences the actual current version. A stale save returns 409 with submitted
+input for manual comparison; validation returns 400 with recoverable fields. There
+is no silent merge, durable autosave or publication action. The existing private
+editor request bound applies; domain text/selection limits still apply.
+
+Origin changes do not refresh existing citations. Return to the source-package
+editor for an explicit proof capture and new reviewed revision where appropriate.
+The original publication and captured evidence remain in history. Live roles,
+CSRF and Origin are checked, and the domain rechecks publication permission inside
+its transaction. See ADR 0023 and the scoped evidence record. Publisher registry/
+thread controls and the complete #29 publishing journey remain separate work.

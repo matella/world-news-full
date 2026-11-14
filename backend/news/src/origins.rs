@@ -202,3 +202,101 @@ async fn read_one(
         .await
         .map_err(db)
 }
+
+/// Private current pointer and sealed evidence, without inferring it from registry links.
+pub struct CurrentEvidence {
+    pub version: i64,
+    pub assertion: Option<PrivateEvidence>,
+}
+#[derive(sqlx::FromRow)]
+pub struct OriginChoice {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+}
+pub struct OriginChoices {
+    pub items: Vec<OriginChoice>,
+    pub next: Option<String>,
+}
+impl OriginEvidence {
+    pub async fn current(
+        &self,
+        session: &Session,
+        article: &str,
+    ) -> Result<CurrentEvidence, AppError> {
+        if !valid_id(article) {
+            return Err(AppError::Validation("Invalid article ID."));
+        }
+        let (mut tx, _) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
+        let (version,id):(i64,Option<i64>)=sqlx::query_as("SELECT origin_version,current_origin_assertion_id FROM news.source_articles WHERE id=$1")
+            .bind(article).fetch_optional(&mut *tx).await.map_err(db)?.ok_or(AppError::NotFound)?;
+        let assertion = if let Some(id) = id {
+            let evidence = read_one(&mut tx, id).await?;
+            if evidence.source_article_id != article || evidence.version != version {
+                return Err(AppError::InvalidData);
+            }
+            let private_note = sqlx::query_scalar(
+                "SELECT private_note FROM news.article_origin_assertions WHERE id=$1",
+            )
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db)?;
+            Some(PrivateEvidence {
+                evidence,
+                private_note,
+            })
+        } else {
+            if version != 0 {
+                return Err(AppError::InvalidData);
+            }
+            None
+        };
+        tx.commit().await.map_err(db)?;
+        Ok(CurrentEvidence { version, assertion })
+    }
+    /// Current labels are choices only; selected IDs stay visible beyond a page boundary.
+    pub async fn choices(
+        &self,
+        session: &Session,
+        selected: &[String],
+        after: Option<&str>,
+    ) -> Result<OriginChoices, AppError> {
+        if selected.len() > 60
+            || selected.iter().any(|id| !valid_id(id))
+            || after.is_some_and(|id| !valid_id(id))
+        {
+            return Err(AppError::Validation("Invalid origin choices."));
+        }
+        let (mut tx, _) = auth::begin_authorised(&self.pool, session, Permission::Edit).await?;
+        // An invalid oversized selection is recoverable by deselecting, without
+        // growing it further on each page request.
+        let mut items: Vec<OriginChoice> = if selected.len() > 20 {
+            vec![]
+        } else {
+            sqlx::query_as("SELECT id,name,enabled FROM news.reporting_origins WHERE ($1::text IS NULL OR id>$1) ORDER BY id LIMIT 21")
+            .bind(after).fetch_all(&mut *tx).await.map_err(db)?
+        };
+        let more = items.len() > 20;
+        items.truncate(20);
+        let next = if more {
+            items.last().map(|r| r.id.clone())
+        } else {
+            None
+        };
+        let retained: Vec<OriginChoice> = sqlx::query_as(
+            "SELECT id,name,enabled FROM news.reporting_origins WHERE id=ANY($1) ORDER BY id",
+        )
+        .bind(selected)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(db)?;
+        for row in retained {
+            if !items.iter().any(|r| r.id == row.id) {
+                items.push(row);
+            }
+        }
+        tx.commit().await.map_err(db)?;
+        Ok(OriginChoices { items, next })
+    }
+}

@@ -138,6 +138,9 @@ def main():
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+origins_database)
             origins_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{origins_database}")
             cargo_suite("origins", origins_env)
+            if os.environ.get("WORLDNEWS_BROWSER_CHECK") == "1":
+                from test_origins import exercise as exercise_origins
+                exercise_origins(ROOT/"target/debug/world-news",f"postgres://fixture_origin_reader:synthetic-origin-reader@127.0.0.1:{port}/{origins_database}",f"postgres://fixture_origin_writer:synthetic-origin-writer@127.0.0.1:{port}/{origins_database}")
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+origins_database)
         if (ROOT/"backend/news/tests/length.rs").is_file():
             length_database=database+"_length"
