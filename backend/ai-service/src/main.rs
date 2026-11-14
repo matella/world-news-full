@@ -1,7 +1,7 @@
 use anyhow::Result;
 use axum::{
-    routing::{get, post},
     Json, Router,
+    routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;

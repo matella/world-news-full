@@ -2,6 +2,8 @@
 // to the adjacent non-empty days.
 import { getEdition, adjacentEditions, latestEditionDate, resolveTheme } from "../../../lib/news";
 import Edition from "../../Edition";
+import { notFound } from "next/navigation";
+import { validEditionDate } from "../../../lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,7 @@ export default async function EditionPage({
   searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   const { date } = await params;
+  if (!validEditionDate(date)) notFound();
   const t = resolveTheme((searchParams ? await searchParams : {}) || {});
   const [stories, adj, latest] = await Promise.all([
     getEdition(date),
@@ -20,6 +23,7 @@ export default async function EditionPage({
     latestEditionDate(),
   ]);
   const isLatest = date === latest;
+  if (!stories.length) notFound();
 
   return (
     <Edition

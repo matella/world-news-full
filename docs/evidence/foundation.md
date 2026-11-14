@@ -36,6 +36,6 @@ this docs/policy/fixture batch; they remain required for code-changing batches.
 ## Rollback and remaining gates
 
 Revert the foundation commit to remove this adoption; no schema or runtime change
-needs reversal. #3's Claude runtime smoke gate remains unverified. CI workflow is
-prepared but a remote result must be reported separately. No merge/deployment,
+needs reversal. #3's Claude runtime smoke gate remains unverified. Foundation CI
+passed: https://github.com/matella/world-news-full/actions/runs/43418944270 . No merge/deployment,
 external publisher call, live schema read or production backup has occurred.

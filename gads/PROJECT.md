@@ -24,9 +24,12 @@ untrusted data. Do not conflate language, geography, outlet count and reporting 
 | --- | --- |
 | Foundation contract/GADS drift | `python3 scripts/check_foundation.py` |
 | Full GADS audit | `python3 ../gads-source/scripts/repo_audit.py .` after pinned checkout |
-| Transitional frontend | `cd frontend && npm ci && npm run build` |
-| Current Rust skeleton | `cargo build --workspace --locked` once #8 adds lock/toolchain |
-| Rust checks | `cargo test --workspace --locked`, `cargo fmt --all -- --check`, `cargo clippy --workspace --locked --all-targets -- -D warnings` once #8 lands |
+| Transitional frontend | `cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm run build` (explicit DATABASE_URL required) |
+| Current Rust skeleton | `cargo build --workspace --locked` |
+| Rust checks | `cargo test --workspace --locked`, `cargo fmt --all -- --check`, `cargo clippy --workspace --locked --all-targets -- -D warnings` |
+| Persistence drill | `python3 scripts/test_persistence.py` (disposable Docker only) |
+| Frontend integration | `python3 scripts/test_frontend.py` after build; optional `WORLDNEWS_BROWSER_CHECK=1` uses installed Playwright/Chromium |
+| Narrow secret-pattern guard | `python3 scripts/check_secrets.py` (does not scan history or prove absence of secrets) |
 
 Update these commands as implementation lands. Never report planned checks as
 passed. Use synthetic fixtures and disposable databases. Separate unit/build checks

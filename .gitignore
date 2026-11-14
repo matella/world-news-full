@@ -1,6 +1,5 @@
 # Rust
 target/
-Cargo.lock
 **/*.rs.bk
 *.pdb
 
@@ -39,3 +38,4 @@ out/
 
 # Task scratch and cloned validation dependencies
 work/
+__pycache__/

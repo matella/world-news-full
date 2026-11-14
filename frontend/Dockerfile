@@ -6,9 +6,7 @@
 FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-# npm install (not ci): package.json pins several deps to "latest", which a fixed lockfile can't
-# satisfy under ci's strict equality. install resolves them and still bakes deps into the image.
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 
 FROM node:24-alpine AS build
 WORKDIR /app
