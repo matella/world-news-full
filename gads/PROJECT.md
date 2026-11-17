@@ -273,3 +273,15 @@ count is approximate. Unknown publication instants remain unknown, and publicati
 age is not factual freshness. Edition guidance must not change article-length
 assessment fingerprints. The versioned draft/interface/transactional publication
 and historical removal policies remain #30/#31 gates. No model call publishes.
+
+## Versioned private edition drafts
+
+Follow ADR 0029 and docs/edition-composition.md. Draft saves select current actual
+publications and never publish private articles or editions implicitly. Recheck
+live session, edition/story versions and exact publication pointers; lock stories
+in stable order. Atomically retain membership/order, next version and immutable
+private before/after audit. Preserve unknown import fences and original identity;
+never reset published snapshots or silently refresh a stale selection. Keep
+previews bounded by entry count and aggregate body bytes before decoding. Schema
+19 requires a matching binary even with unchanged public views/grants; no live
+migration or grant follows from test fixtures. #30/#31 UI/publication gates remain.
