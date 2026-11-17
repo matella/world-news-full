@@ -557,6 +557,157 @@ async fn edition_drafts_fence_selection_preserve_history_and_never_publish() {
     let unchanged = drafts.get(&session, &head.id).await.unwrap();
     assert_eq!(unchanged.head.lock_version, 4);
     assert!(unchanged.entries.is_empty());
+    // Bounded navigation and retained choices are private, nonpersistent observations.
+    for day in 1..=25 {
+        drafts
+            .create(
+                &session,
+                chrono::NaiveDate::from_ymd_opt(2026, 12, day).unwrap(),
+                "PRIVATE-PAGED-DRAFT",
+            )
+            .await
+            .unwrap();
+        seed(&owner, &format!("choice-{day:02}"), true).await;
+    }
+    let page = drafts
+        .cards(&session, world_news::editions::drafts::Filter::Drafts, None)
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 20);
+    assert!(page.items.iter().all(|c| c.state == "draft"));
+    let older = drafts
+        .cards(
+            &session,
+            world_news::editions::drafts::Filter::Drafts,
+            page.next.as_ref(),
+        )
+        .await
+        .unwrap();
+    assert!(!older.items.is_empty());
+    assert!(
+        older
+            .items
+            .iter()
+            .all(|c| !page.items.iter().any(|p| p.id == c.id))
+    );
+    let mut cursor = None;
+    let mut ids = std::collections::BTreeSet::new();
+    for _ in 0..5 {
+        let page = drafts
+            .cards(
+                &session,
+                world_news::editions::drafts::Filter::All,
+                cursor.as_ref(),
+            )
+            .await
+            .unwrap();
+        for card in page.items {
+            assert!(ids.insert(card.id));
+        }
+        cursor = page.next;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    assert!(cursor.is_none());
+    assert!(ids.contains("historical-edition"));
+    assert!(ids.contains(&head.id));
+    let keep = vec!["private".to_owned(), "beta".to_owned()];
+    let choices = drafts.story_choices(&session, None, &keep).await.unwrap();
+    assert_eq!(choices.items.len(), 22);
+    assert!(choices.next.is_some());
+    let private = choices.items.iter().find(|c| c.id == "private").unwrap();
+    assert_eq!(private.state, world_news::editorial::PublicState::Draft);
+    assert!(private.title.is_none());
+    assert!(private.revision_id.is_none());
+    assert_eq!(
+        choices.items.iter().find(|c| c.id == "beta").unwrap().state,
+        world_news::editorial::PublicState::Withdrawn
+    );
+    let next = drafts
+        .story_choices(&session, choices.next.as_deref(), &keep)
+        .await
+        .unwrap();
+    assert!(
+        next.items
+            .iter()
+            .filter(|c| c.state == world_news::editorial::PublicState::Published)
+            .all(|c| !choices.items.iter().any(|p| p.id == c.id))
+    );
+    assert!(next.items.iter().any(|c| c.id == "beta"));
+    assert!(next.items.iter().any(|c| c.id == "private"));
+    let count_before: i64 = sqlx::query_scalar("SELECT count(*) FROM news.edition_actions")
+        .fetch_one(&owner)
+        .await
+        .unwrap();
+    let duplicate = drafts
+        .prepare(
+            &session,
+            &[entry("alpha", 1), entry("alpha", 1)],
+            Some("alpha"),
+        )
+        .await
+        .unwrap();
+    assert!(
+        duplicate
+            .warnings
+            .iter()
+            .any(|w| w.kind == WarningKind::DuplicateStory)
+    );
+    assert!(
+        duplicate
+            .warnings
+            .iter()
+            .any(|w| w.kind == WarningKind::MissingLead)
+    );
+    let stale = drafts
+        .prepare(&session, &[entry("alpha", 0)], Some("alpha"))
+        .await
+        .unwrap();
+    assert!(
+        stale
+            .warnings
+            .iter()
+            .any(|w| w.kind == WarningKind::StaleSelection)
+    );
+    let private = drafts
+        .prepare(&session, &[entry("private", 0)], Some("private"))
+        .await
+        .unwrap();
+    assert!(
+        private
+            .warnings
+            .iter()
+            .any(|w| w.kind == WarningKind::StaleSelection)
+    );
+    assert!(
+        private
+            .warnings
+            .iter()
+            .any(|w| w.kind == WarningKind::UnknownPublicationTime)
+    );
+    let mut forged = entry("alpha", 1);
+    forged.revision_id = "revision-beta".into();
+    assert!(matches!(
+        drafts.prepare(&session, &[forged], Some("alpha")).await,
+        Err(AppError::Validation(_))
+    ));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM news.edition_actions")
+            .fetch_one(&owner)
+            .await
+            .unwrap(),
+        count_before
+    );
+    assert!(
+        drafts
+            .get(&session, &head.id)
+            .await
+            .unwrap()
+            .entries
+            .is_empty()
+    );
+
     auth::disable(&owner, "edition-editor").await.unwrap();
     assert!(matches!(
         drafts.get(&session, &head.id).await,
@@ -566,6 +717,20 @@ async fn edition_drafts_fence_selection_preserve_history_and_never_publish() {
         drafts
             .create(&session, "2026-11-18".parse().unwrap(), "PRIVATE-REVOKED")
             .await,
+        Err(AppError::Forbidden)
+    ));
+    assert!(matches!(
+        drafts
+            .cards(&session, world_news::editions::drafts::Filter::Drafts, None)
+            .await,
+        Err(AppError::Forbidden)
+    ));
+    assert!(matches!(
+        drafts.story_choices(&session, None, &[]).await,
+        Err(AppError::Forbidden)
+    ));
+    assert!(matches!(
+        drafts.prepare(&session, &[], None).await,
         Err(AppError::Forbidden)
     ));
     reader.close().await;

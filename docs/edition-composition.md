@@ -81,3 +81,24 @@ Import events record import bookkeeping, not original publication instants. Only
 explicit `published`/`corrected` revision events supply publication age; an
 import-only revision remains unknown even when the import event has a recent
 created_at. Do not substitute edition dates or revision creation times.
+
+## Private workbench preparation
+
+The service supplies 20-card edition pages (draft-only or all) ordered by edition
+date and stable identity, with an exclusive older-page cursor. Story choices page
+20 actual current publications by stable ID and retain up to 100 selected IDs,
+including a now-private or withdrawn item. Missing publication metadata stays
+explicitly absent; a private candidate title is not presented as a publication.
+Choice format/nature/language and proposed section come from the actual published
+revision and shared taxonomy, independently of language/geographic assumptions.
+
+Choice metadata describes current stored state. It does not refresh a prepared
+revision/version automatically. A nonpersistent preparation method retains own
+selection order/lead and duplicate input, reports stale/private/withdrawn articles,
+and rejects mismatched revision/story identities. It uses the same count/time/
+byte bounds, without creating a draft, updating membership or writing edition
+audit. Final save always rechecks actual publication pointers and all fences.
+
+Every navigation/preparation call rechecks the live editorial identity/session.
+These read models add no public route or additional writer privilege. The native
+composition interface and its browser journey remain pending; see ADR 0030.
