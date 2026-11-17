@@ -11,6 +11,7 @@
 <main id="contenu">
 <h1{% if let Some(revision) = article %} lang="{{ revision.language }}"{% endif %}>{{ title }}</h1>
 {% if let Some(text) = message %}<p>{{ text }}</p>{% endif %}
+{% if !notices.is_empty() %}<section aria-labelledby="publication-notices"><h2 id="publication-notices">Publication, corrections et retrait</h2><ol>{% for notice in notices %}<li><strong>{{ notice.label }}</strong> · <time datetime="{{ notice.instant }}">{{ notice.date }}</time><p>{{ notice.reason }}</p></li>{% endfor %}</ol>{% if let Some(url) = notices_next %}<a rel="next" href="{{ url }}">Avis plus anciens</a>{% endif %}</section>{% endif %}
 {% if let Some(revision) = article %}
 <article lang="{{ revision.language }}">
 {% if legacy %}<p>Archive importée. Le processus de génération et la vérification d’origine ne sont pas attestés.</p>{% endif %}

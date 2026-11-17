@@ -534,3 +534,17 @@ mod structured_tests {
         assert_eq!(serde_json::to_value(blocks).unwrap(), old);
     }
 }
+
+/// Public lifecycle projection: deliberately no actor, private note or provenance.
+#[derive(sqlx::FromRow)]
+pub struct PublicationNotice {
+    pub id: i64,
+    pub revision_id: String,
+    pub action: String,
+    pub public_reason: String,
+    pub created_at: DateTime<Utc>,
+}
+pub struct NoticePage {
+    pub items: Vec<PublicationNotice>,
+    pub next: Option<i64>,
+}

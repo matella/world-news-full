@@ -250,6 +250,44 @@ fn validate_edition(item: &EditionSummary) -> Result<(), AppError> {
     }
 }
 
+impl Repository {
+    pub async fn notices(
+        &self,
+        id: &str,
+        before: Option<i64>,
+        size: PageSize,
+    ) -> Result<NoticePage, AppError> {
+        check_id(id)?;
+        if before.is_some_and(|v| v <= 0) {
+            return Err(AppError::Validation("Invalid notice cursor."));
+        }
+        let mut items:Vec<PublicationNotice>=sqlx::query_as("SELECT id,revision_id,action,public_reason,created_at FROM news.public_notices WHERE story_id=$1 AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT $3")
+            .bind(id).bind(before).bind(i64::from(size.get())+1).fetch_all(&self.pool).await.map_err(|e|AppError::database("public_notices",e))?;
+        if items.iter().any(|r| {
+            r.id <= 0
+                || !valid_id(&r.revision_id)
+                || !matches!(r.action.as_str(), "published" | "corrected" | "withdrawn")
+                || r.public_reason.trim().is_empty()
+                || r.public_reason.chars().count() > 10000
+        }) {
+            return Err(AppError::InvalidData);
+        }
+        let more = items.len() > size.get() as usize;
+        items.truncate(size.get() as usize);
+        let next = if more {
+            items.last().map(|r| r.id)
+        } else {
+            None
+        };
+        Ok(NoticePage { items, next })
+    }
+    pub async fn is_withdrawn(&self, id: &str) -> Result<bool, AppError> {
+        check_id(id)?;
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM news.public_notices n WHERE n.story_id=$1 AND n.action='withdrawn') AND NOT EXISTS(SELECT 1 FROM news.public_stories s WHERE s.id=$1)")
+            .bind(id).fetch_one(&self.pool).await.map_err(|e|AppError::database("public_withdrawal",e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,3 +1,4 @@
+mod article_workflow;
 mod origin_registry;
 mod thread_curation;
 use super::super::{AppState, message, path_segment, with_query};
@@ -348,6 +349,7 @@ pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .merge(origin_registry::routes())
         .merge(thread_curation::routes())
+        .merge(article_workflow::routes())
         .route("/admin/assets.css", get(css))
         .route("/admin/pipeline", get(overview))
         .route("/admin/sources", get(sources).post(create_source))
@@ -1056,6 +1058,7 @@ async fn view_draft(
             .await?;
 
         let mut v = page(&state, &session, format!("Brouillon : {}", revision.title));
+        v.links.push(Link{label:"Relecture, publication, correction et retrait".into(),href:format!("/admin/editor{}/workflow",path_segment("story",&id))});
 
         v.paragraphs.push(format!(
             "Version privée · {} · {}. La création d’un brouillon ne le publie pas.",

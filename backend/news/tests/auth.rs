@@ -403,7 +403,7 @@ async fn identity_sessions_csrf_and_role_boundaries_fail_closed() {
         )
         .await
         .status(),
-        StatusCode::OK
+        StatusCode::SEE_OTHER
     );
     let csrf_body = format!("csrf={}", editor.csrf);
     let other_session_csrf = format!("csrf={}", publisher.csrf);

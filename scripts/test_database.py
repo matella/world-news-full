@@ -85,6 +85,15 @@ def main():
             editorial_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{editorial_database}")
             cargo_suite("editorial", editorial_env)
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+editorial_database)
+        if (ROOT/"backend/news/tests/workflow.rs").is_file():
+            workflow_database=database+"_workflow"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+workflow_database)
+            workflow_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{workflow_database}")
+            cargo_suite("workflow",workflow_env)
+            if os.environ.get("WORLDNEWS_BROWSER_CHECK") == "1":
+                from test_workflow import exercise as exercise_workflow
+                exercise_workflow(ROOT/"target/debug/world-news",f"postgres://fixture_workflow_reader:synthetic-workflow-reader@127.0.0.1:{port}/{workflow_database}",f"postgres://fixture_workflow_writer:synthetic-workflow-writer@127.0.0.1:{port}/{workflow_database}")
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+workflow_database)
         if (ROOT/"backend/news/tests/registry.rs").is_file():
             registry_database=database+"_registry"
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+registry_database)

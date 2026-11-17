@@ -5,6 +5,7 @@
 {% if let Some(text) = message %}<p role="status">{{ text }}</p>{% endif %}
 {% if let Some(url) = details %}<p><a href="{{ url }}">Voir la version enregistrée, ses sources, son classement et sa longueur</a></p>{% endif %}
 {% if let Some(url) = sources %}<p><a href="{{ url }}">Attribuer les sources et les affirmations</a></p>{% endif %}
+{% if let Some(url) = workflow %}<p><a href="{{ url }}">Relecture, publication, correction et retrait</a></p>{% endif %}
 {% if let Some(revision) = article %}<section><h2>Prévisualisation non enregistrée</h2><article lang="{{ revision.language }}"><h3>{{ revision.title }}</h3>{% include "article_body.html" %}{% include "citations.html" %}</article></section>{% endif %}
 {% if let Some(f) = form %}
 <p>Enregistrer crée une nouvelle version privée à relire. Les sources devront être rattachées ; une dérogation de longueur doit être reconfirmée. Le texte n’est jamais publié par ce formulaire.</p>

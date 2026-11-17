@@ -60,6 +60,7 @@ struct View {
     block_kinds: &'static [BlockKind],
     details: Option<String>,
     sources: Option<String>,
+    workflow: Option<String>,
     article: Option<Revision>,
     evidence: Option<crate::citations::Report>,
     length: Option<crate::length::Report>,
@@ -90,6 +91,7 @@ fn view(state: &AppState, session: &Session, title: &str) -> View {
         block_kinds: BlockKind::all(),
         details: None,
         sources: None,
+        workflow: None,
         article: None,
         evidence: None,
         length: None,
@@ -269,6 +271,10 @@ fn with_form(mut v: View, f: Fields) -> View {
         .story
         .as_deref()
         .map(|id| format!("{}/sources", route(id)));
+    v.workflow = f
+        .story
+        .as_deref()
+        .map(|id| format!("{}/workflow", route(id)));
     v.form = Some(f);
     v
 }
