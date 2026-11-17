@@ -534,13 +534,16 @@ async fn editorial_transactions_preserve_publication_history_and_live_permission
             .await,
         Err(AppError::Conflict)
     ));
-    assert_eq!(public(&app, "/story/news-a").await.0, StatusCode::NOT_FOUND);
+    assert_eq!(public(&app, "/story/news-a").await.0, StatusCode::GONE);
     assert_eq!(
         public(&app, &format!("/story/news-a?revision={snapshot_revision}"))
             .await
             .0,
-        StatusCode::NOT_FOUND
+        StatusCode::GONE
     );
+    let (_, notice) = public(&app, "/story/news-a").await;
+    assert!(notice.contains("Synthetic withdrawal: reporting no longer reliable"));
+    assert!(!notice.contains("<article"));
     let (_, html) = public(&app, "/edition/2026-11-13").await;
     assert!(html.contains("Article retiré") && !html.contains("First published synthetic version"));
 

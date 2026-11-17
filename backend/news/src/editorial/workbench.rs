@@ -196,3 +196,93 @@ impl EditorialService {
         Ok(SourceChoices { items: page, next })
     }
 }
+
+#[derive(sqlx::FromRow)]
+pub struct ReviewRecord {
+    pub id: i64,
+    pub revision_id: String,
+    pub actor_id: String,
+    pub outcome: String,
+    pub internal_note: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+#[derive(sqlx::FromRow)]
+pub struct PublicationRecord {
+    pub id: i64,
+    pub revision_id: String,
+    pub actor_id: String,
+    pub action: String,
+    pub public_reason: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+/// Private observed preparation. No ready flag is accepted by a write command.
+pub struct Workflow {
+    pub head: Head,
+    pub revision: Revision,
+    pub evidence: citations::Report,
+    pub length: crate::length::Report,
+    pub source_blocker: Option<String>,
+    pub length_blocker: Option<String>,
+    pub revisions: Vec<RevisionRecord>,
+    pub reviews: Vec<ReviewRecord>,
+    pub publications: Vec<PublicationRecord>,
+}
+fn observed_check(result: Result<(), AppError>) -> Result<Option<String>, AppError> {
+    match result {
+        Ok(()) => Ok(None),
+        Err(AppError::Validation(text)) => Ok(Some(text.into())),
+        Err(e) => Err(e),
+    }
+}
+impl EditorialService {
+    pub async fn workflow(
+        &self,
+        session: &Session,
+        id: &str,
+        before_revision: Option<i32>,
+        before_review: Option<i64>,
+        before_publication: Option<i64>,
+    ) -> Result<Workflow, AppError> {
+        check_id(id)?;
+        if before_revision.is_some_and(|v| v <= 0)
+            || before_review.is_some_and(|v| v <= 0)
+            || before_publication.is_some_and(|v| v <= 0)
+        {
+            return Err(AppError::Validation("Invalid workflow cursor."));
+        }
+        let (mut tx, _) = self.begin(session, Permission::Edit).await?;
+        let head = load_head(&mut tx, id, None).await?;
+        let revision = load_revision(&mut tx, &head.current_revision_id).await?;
+        if revision.story_id != id {
+            return Err(AppError::InvalidData);
+        }
+        let source_blocker =
+            observed_check(citations::publication_check(&mut tx, &revision).await)?;
+        let length_blocker = observed_check(
+            crate::length::publication_check(&mut tx, &revision, &self.policy).await,
+        )?;
+        let evidence = citations::private_report(&mut tx, &revision).await?;
+        let recorded = crate::length::private_assessment(&mut tx, &revision.id).await?;
+        let length = crate::length::Report::new(&revision, &self.policy, recorded)?;
+        let revisions=sqlx::query_as("SELECT id,number,actor_id,title,change_reason,created_at FROM news.story_revisions WHERE story_id=$1 AND ($2::int IS NULL OR number<$2) ORDER BY number DESC LIMIT 20")
+            .bind(id).bind(before_revision).fetch_all(&mut *tx).await.map_err(|e|AppError::database("workflow_revisions",e))?;
+        let reviews=sqlx::query_as("SELECT review.id,review.revision_id,review.actor_id,review.outcome,review.internal_note,review.created_at FROM news.editorial_reviews review JOIN news.story_revisions r ON r.id=review.revision_id WHERE r.story_id=$1 AND ($2::bigint IS NULL OR review.id<$2) ORDER BY review.id DESC LIMIT 20")
+            .bind(id).bind(before_review).fetch_all(&mut *tx).await.map_err(|e|AppError::database("workflow_reviews",e))?;
+        let publications=sqlx::query_as("SELECT id,revision_id,actor_id,action,public_reason,created_at FROM news.publication_events WHERE story_id=$1 AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT 20")
+            .bind(id).bind(before_publication).fetch_all(&mut *tx).await.map_err(|e|AppError::database("workflow_publications",e))?;
+        tx.commit()
+            .await
+            .map_err(|e| AppError::database("workflow_read", e))?;
+        Ok(Workflow {
+            head,
+            revision,
+            evidence,
+            length,
+            source_blocker,
+            length_blocker,
+            revisions,
+            reviews,
+            publications,
+        })
+    }
+}

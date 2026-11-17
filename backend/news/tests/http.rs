@@ -174,13 +174,17 @@ async fn published_route_contract_uses_only_restricted_views() {
     assert!(body.contains("Lire la version actuelle"));
     sqlx::raw_sql("INSERT INTO news.publication_events(story_id,revision_id,action,public_reason,actor_id) VALUES ('legacy-a','route-correction','withdrawn','Synthetic withdrawal','fixture-editor');
         UPDATE news.stories SET state='withdrawn' WHERE id='legacy-a';").execute(&owner).await.unwrap();
-    assert_eq!(get(&app, "/story/legacy-a").await.0, StatusCode::NOT_FOUND);
+    assert_eq!(get(&app, "/story/legacy-a").await.0, StatusCode::GONE);
     assert_eq!(
         get(&app, &format!("/story/legacy-a?revision={old_revision}"))
             .await
             .0,
-        StatusCode::NOT_FOUND
+        StatusCode::GONE
     );
+    let (status, notice) = get(&app, "/story/legacy-a").await;
+    assert_eq!(status, StatusCode::GONE);
+    assert!(notice.contains("Synthetic withdrawal"));
+    assert!(!notice.contains("<article") && !notice.contains("fixture-editor"));
     let (status, body) = get(&app, "/edition/2026-01-10").await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("Article retiré") && !body.contains("synthetic-title"));

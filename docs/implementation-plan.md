@@ -239,3 +239,16 @@ nonpersistent review step; inverses are exact-state fenced and stale reasons sta
 recoverable. See ADR 0026 and docs/story-threads.md. No direct graph SQL, source
 HTTP, schema/dependency or article-publication endpoint is introduced. Complete
 prepublication/review/publish/correct/withdraw acceptance still remains open.
+
+## Complete manual article workflow
+
+PR #83 is merged at d0ff8da392689db102041a13eadca096006a8bc1 after Application
+44172914648, Foundation/GADS 44172914698 and Deployment policy 44172914713 passed.
+The next #29 slice connects candidate checks, submission, private review,
+publication, correction, withdrawal and read-only historical previews. Public
+initial/correction/withdrawal notices exclude private notes/actors; withdrawn
+article URLs return 410 without prose. Migration 18 changes only the existing
+public-notice view and requires a compatible rollback binary. See ADR 0027 and
+docs/editorial-workflow.md. Focused restricted HTTP and separate-role Chromium
+journeys passed; full regression and PR gates are recorded in the evidence before
+merge/issue closure. No live migration, release or article publication occurred.

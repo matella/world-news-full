@@ -29,5 +29,7 @@ still apply. Malformed encoding, duplicate/unknown keys and publication intents 
 rejected. Other routes retain their existing limits. All mutations require the
 existing live session, role, Origin and CSRF boundary. No action in this form publishes.
 
-See ADR 0021 and docs/evidence/editor-authoring.md. Source-package selection,
-article-origin/thread controls and full publication workflow remain #29 work.
+See ADR 0021 and docs/evidence/editor-authoring.md. Source-package and publisher
+origin/thread controls have dedicated protected screens. Continue from this form
+to the [manual review/publication workflow](editorial-workflow.md); authoring saves
+remain private and never publish automatically.

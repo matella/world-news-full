@@ -67,6 +67,14 @@ struct Page {
     length: Option<crate::length::Report>,
     length_private: bool,
     legacy: bool,
+    notices: Vec<NoticeItem>,
+    notices_next: Option<String>,
+}
+struct NoticeItem {
+    label: &'static str,
+    reason: String,
+    instant: String,
+    date: String,
 }
 struct Item {
     title: String,
@@ -94,6 +102,8 @@ impl Page {
             length: None,
             length_private: false,
             legacy: false,
+            notices: vec![],
+            notices_next: None,
         }
     }
 }
@@ -298,6 +308,17 @@ async fn story(
             return Err(AppError::Validation("Invalid revision ID."));
         }
         let repository = reader(&state).await?;
+        let before=query.0.get("notices_before").map(|s|s.parse::<i64>().ok().filter(|v|*v>0).ok_or(AppError::Validation("Invalid notice cursor."))).transpose()?;
+        let notices=repository.notices(&id,before,PageSize::new(20)?).await?;
+        let base=path_segment("story",&id);
+        let mut page=Page::new(&state.config,"Article retiré",Some(&base));
+        let zone=state.config.editorial.publication_timezone.parse::<chrono_tz::Tz>().map_err(|_|AppError::InvalidData)?;
+        page.notices=notices.items.into_iter().map(|r|NoticeItem {label:match r.action.as_str(){"published"=>"Publication","corrected"=>"Correction",_=>"Retrait"},reason:r.public_reason,instant:r.created_at.to_rfc3339(),date:r.created_at.with_timezone(&zone).format("%Y-%m-%d %H:%M %Z").to_string()}).collect();
+        page.notices_next=notices.next.map(|id|{let mut pairs=vec![("notices_before",id.to_string())];if let Some(revision)=revision_id{pairs.push(("revision",revision.clone()));}with_query(&base,&pairs.iter().map(|(k,v)|(*k,v.as_str())).collect::<Vec<_>>())});
+        if repository.is_withdrawn(&id).await? {
+            page.message=Some("Cet article a été retiré. Son contenu n’est plus proposé ; les motifs publics et avis conservés figurent ci-dessous.".into());
+            return Ok((StatusCode::GONE,page));
+        }
         let revision = match revision_id {
             Some(id) => repository.revision(id).await?,
             None => repository.story(&id).await?,
@@ -309,7 +330,9 @@ async fn story(
         let canonical_path = revision_id
             .map(|id| with_query(&path, &[("revision", id)]))
             .unwrap_or(path);
-        let mut page = Page::new(&state.config, revision.title.clone(), Some(&canonical_path));
+        let mut article_page=Page::new(&state.config,revision.title.clone(),Some(&canonical_path));
+        article_page.notices=page.notices;article_page.notices_next=page.notices_next;
+        let mut page=article_page;
         if revision_id.is_some() {
             page.message = Some("Vous consultez la révision conservée dans une édition. La version actuelle peut être différente.".into());
             page.items.push(Item { title: "Lire la version actuelle".into(), href: Some(path_segment("story", &id)), detail: String::new() });
@@ -321,10 +344,13 @@ async fn story(
             ArticleKind::LegacySummary | ArticleKind::LegacySynthesis
         );
         page.article = Some(revision);
-        Ok(page)
+        Ok((StatusCode::OK,page))
     }
     .await;
-    render(&state.config, result)
+    match result {
+        Ok((status, page)) => render_status(status, page),
+        Err(e) => render(&state.config, Err(e)),
+    }
 }
 async fn archive(
     State(state): State<AppState>,

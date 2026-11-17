@@ -247,3 +247,17 @@ Inverse forms accept recorded fences, never caller snapshots/ready flags, and un
 rechecks exact states. Preserve submitted recovery input without advancing fences.
 Private aliases/history remain inspectable; old identity/audit data is never deleted.
 Article publication/correction/withdrawal acceptance remains a separate #29 gate.
+
+## Manual editorial publication
+
+Use docs/editorial-workflow.md and ADR 0027. Complete source/length/editor acceptance
+must pass before merging the article workflow. Native transitions call the existing
+service with live role/session/version/revision/CSRF/Origin checks; read-time
+readiness never authorises writes. Review notes/actors stay private; publication,
+correction and withdrawal reasons are intentionally public. Preserve immutable
+history, pending private candidates and edition revision pointers. A withdrawn
+article returns 410 with notices and no article body, including old revision URLs.
+Migration 18 retains public-notice columns/grants and adds initial publication
+reasons; schema-17 binaries refuse it. Do not deploy an incompatible rollback or
+apply live migrations without the concrete approved release plan. Edition
+composition, translation and reader parity remain separately tracked gates.

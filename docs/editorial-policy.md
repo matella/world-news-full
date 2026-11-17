@@ -3,7 +3,8 @@
 Related issues: #9, #26–#33. Executable settings: `config/editorial.json`.
 These are selected initial settings, not claims about existing publisher behaviour.
 The Rust editorial services enforce attribution and revision-bound length policy;
-the complete article editor remains #29. The transitional Next app does not enforce
+the complete article workflow is documented in [editorial workflow](editorial-workflow.md).
+The transitional Next app does not enforce
 these new publication gates.
 
 ## Publication identity and formats

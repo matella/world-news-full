@@ -57,6 +57,11 @@ async fn guard(State(state): State<AppState>, mut request: Request, next: Next) 
         Err(error) => return failure(&state, error),
     };
     let path = request.uri().path();
+    let matched = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(MatchedPath::as_str)
+        .unwrap_or("");
     let publisher_mutation = unsafe_method
         && (path == "/admin/sources"
             || path.starts_with("/admin/sources/")
@@ -65,6 +70,12 @@ async fn guard(State(state): State<AppState>, mut request: Request, next: Next) 
             || path.starts_with("/admin/jobs/")
             || path.starts_with("/admin/extractions/")
             || path.starts_with("/admin/batches/")
+            || matches!(
+                matched,
+                "/admin/editor/story/{id}/review"
+                    | "/admin/editor/story/{id}/publish"
+                    | "/admin/editor/story/{id}/withdraw"
+            )
             || path == "/admin/editor/threads"
             || path.starts_with("/admin/editor/threads/")
             || path.starts_with("/admin/editor/thread-actions/")
@@ -241,13 +252,8 @@ async fn dashboard(
         Err(_) => failure(&state, AuthError::Unavailable),
     }
 }
-async fn publishing(State(state): State<AppState>) -> Response {
-    message(
-        &state.config,
-        StatusCode::OK,
-        "Espace de publication",
-        "Votre compte permet la publication. Le parcours de révision et de publication est encore en préparation.",
-    )
+async fn publishing() -> Response {
+    Redirect::to("/admin/editor?filter=in_review").into_response()
 }
 async fn logout(State(state): State<AppState>, Extension(session): Extension<Session>) -> Response {
     let Some(auth) = &state.auth else {
