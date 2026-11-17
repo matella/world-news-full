@@ -30,7 +30,7 @@ fn config(reader: &str, writer: Option<&str>) -> Config {
     })
     .unwrap()
 }
-async fn login(app: &Router, auth: &AuthService, user: &str) -> Session {
+async fn login(app: &Router, auth: &AuthService, user: &str) -> (Session, String) {
     let body = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("username", user)
         .append_pair("password", PASSWORD)
@@ -61,7 +61,79 @@ async fn login(app: &Router, auth: &AuthService, user: &str) -> Session {
         .join("; ");
     let mut headers = HeaderMap::new();
     headers.insert(header::COOKIE, cookies.parse().unwrap());
-    auth.authenticate(&headers).await.unwrap()
+    (auth.authenticate(&headers).await.unwrap(), cookies)
+}
+async fn http(
+    app: &Router,
+    method: &str,
+    path: &str,
+    cookie: Option<&str>,
+    origin: bool,
+    fields: &std::collections::BTreeMap<String, String>,
+) -> axum::response::Response {
+    let mut builder = Request::builder().method(method).uri(path);
+    if let Some(cookie) = cookie {
+        builder = builder.header(header::COOKIE, cookie);
+    }
+    if origin {
+        builder = builder.header(header::ORIGIN, "https://news.invalid");
+    }
+    let body = url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(fields)
+        .finish();
+    app.clone()
+        .oneshot(
+            builder
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+async fn text(response: axum::response::Response) -> String {
+    String::from_utf8(
+        http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .unwrap()
+            .to_bytes()
+            .to_vec(),
+    )
+    .unwrap()
+}
+fn form(html: &str, action: &str) -> std::collections::BTreeMap<String, String> {
+    let doc = html_scraper::Html::parse_document(html);
+    let selector = html_scraper::Selector::parse("form[action]").unwrap();
+    let form = doc
+        .select(&selector)
+        .find(|f| f.value().attr("action") == Some(action))
+        .unwrap();
+    let controls =
+        html_scraper::Selector::parse("input[name],textarea[name],select[name]").unwrap();
+    let mut result = std::collections::BTreeMap::new();
+    for c in form.select(&controls) {
+        if c.value().attr("type") == Some("checkbox") && c.value().attr("checked").is_none() {
+            continue;
+        }
+        let value = match c.value().name() {
+            "textarea" => c.text().collect(),
+            "select" => {
+                let options = html_scraper::Selector::parse("option").unwrap();
+                let options: Vec<_> = c.select(&options).collect();
+                options
+                    .iter()
+                    .find(|o| o.value().attr("selected").is_some())
+                    .unwrap_or(&options[0])
+                    .value()
+                    .attr("value")
+                    .unwrap()
+                    .into()
+            }
+            _ => c.value().attr("value").unwrap_or("").into(),
+        };
+        result.insert(c.value().attr("name").unwrap().into(), value);
+    }
+    result
 }
 fn instant(text: &str) -> DateTime<Utc> {
     text.parse().unwrap()
@@ -169,6 +241,7 @@ async fn threads_preserve_identity_counts_reversible_curation_and_public_boundar
     for (id, role) in [
         ("thread-publisher", Role::Publisher),
         ("thread-editor", Role::Editor),
+        ("thread-browser", Role::Publisher),
     ] {
         auth::bootstrap(&owner, id, role, Zeroizing::new(PASSWORD.into()))
             .await
@@ -190,8 +263,8 @@ async fn threads_preserve_identity_counts_reversible_curation_and_public_boundar
         writer.clone(),
         &url::Url::parse("https://news.invalid").unwrap(),
     );
-    let publisher = login(&app, &auth, "thread-publisher").await;
-    let editor = login(&app, &auth, "thread-editor").await;
+    let (publisher, publisher_cookie) = login(&app, &auth, "thread-publisher").await;
+    let (editor, editor_cookie) = login(&app, &auth, "thread-editor").await;
     let service = Threads::new(writer.clone());
     let public = Threads::new(reader.clone());
     let policy = Taxonomy::repository();
@@ -958,6 +1031,526 @@ async fn threads_preserve_identity_counts_reversible_curation_and_public_boundar
             .await
             .is_err()
     );
+    // Actual protected curation forms using the restricted graph writer.
+    for id in [
+        "ui-article-1",
+        "ui-article-2",
+        "ui-article-3",
+        "zz-thread-story-1",
+        "zz-thread-story-2",
+    ] {
+        seed(&owner, id, "fr", &[], &[], false).await;
+    }
+    let root = "/admin/editor/threads";
+    let empty = std::collections::BTreeMap::new();
+    assert_eq!(
+        http(&app, "GET", root, None, false, &empty).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let editor_html =
+        text(http(&app, "GET", root, Some(&editor_cookie), false, &empty).await).await;
+    assert!(!editor_html.contains("Créer le suivi</button>"));
+    let doc = html_scraper::Html::parse_document(&editor_html);
+    let csrf = doc
+        .select(&html_scraper::Selector::parse("input[name='csrf']").unwrap())
+        .next()
+        .unwrap()
+        .value()
+        .attr("value")
+        .unwrap()
+        .to_owned();
+    let html = text(http(&app, "GET", root, Some(&publisher_cookie), false, &empty).await).await;
+    let mut fields = form(&html, root);
+    fields.insert("id".into(), "ui-left".into());
+    fields.insert("title".into(), "Left <script>literal title</script>".into());
+    fields.insert("reason".into(), "Create a human subject identity".into());
+    let mut bad = fields.clone();
+    bad.remove("csrf");
+    assert_eq!(
+        http(&app, "POST", root, Some(&publisher_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        http(&app, "POST", root, Some(&publisher_cookie), false, &fields)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    bad = fields.clone();
+    bad.insert("csrf".into(), csrf.clone());
+    assert_eq!(
+        http(&app, "POST", root, Some(&editor_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    bad = fields.clone();
+    bad.insert("actor_id".into(), "thread-publisher".into());
+    assert_eq!(
+        http(&app, "POST", root, Some(&publisher_cookie), true, &bad)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        http(&app, "POST", root, Some(&publisher_cookie), true, &fields)
+            .await
+            .status(),
+        StatusCode::SEE_OTHER
+    );
+    fields.insert("id".into(), "ui-right".into());
+    fields.insert("title".into(), "Right subject".into());
+    assert_eq!(
+        http(&app, "POST", root, Some(&publisher_cookie), true, &fields)
+            .await
+            .status(),
+        StatusCode::SEE_OTHER
+    );
+    let left = "/admin/editor/threads/ui-left";
+    let member_path = format!("{left}/member");
+    let html = text(http(&app, "GET", left, Some(&publisher_cookie), false, &empty).await).await;
+    assert!(!html.contains("<script>literal title</script>"));
+    let mut stale_edit = form(&html, &format!("{left}/edit"));
+    let mut member = form(&html, &member_path);
+    member.insert("lookup".into(), "ui-article-1".into());
+    member.insert(
+        "reason".into(),
+        "Retain this private reason while finding the article".into(),
+    );
+    member.insert("intent".into(), "find".into());
+    let prepared = http(
+        &app,
+        "POST",
+        &member_path,
+        Some(&publisher_cookie),
+        true,
+        &member,
+    )
+    .await;
+    assert_eq!(prepared.status(), StatusCode::OK);
+    member = form(&text(prepared).await, &member_path);
+    assert_eq!(member["story"], "ui-article-1");
+    assert_eq!(service.get(&editor, "ui-left").await.unwrap().version, 1);
+    member.remove("intent");
+    let invalid = http(
+        &app,
+        "POST",
+        &member_path,
+        Some(&publisher_cookie),
+        true,
+        &member,
+    )
+    .await;
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+    assert!(text(invalid).await.contains("Retain this private reason"));
+    member.insert("unknown".into(), "yes".into());
+    member.insert("when".into(), "2026-11-14T12:30:00+01:00".into());
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &member_path,
+            Some(&publisher_cookie),
+            true,
+            &member
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    member.insert("when".into(), "".into());
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &member_path,
+            Some(&publisher_cookie),
+            true,
+            &member
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    let first = service.get(&editor, "ui-left").await.unwrap();
+    assert!(first.members[0].update_at.is_none());
+    let added_at = first.members[0].added_at;
+    let html = text(http(&app, "GET", left, Some(&publisher_cookie), false, &empty).await).await;
+    member = form(&html, &member_path);
+    member.insert("story".into(), "ui-article-1".into());
+    member.insert("when".into(), "2026-11-14T12:30:00+01:00".into());
+    member.insert("reason".into(), "Record a genuinely known instant".into());
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &member_path,
+            Some(&publisher_cookie),
+            true,
+            &member
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    let first = service.get(&editor, "ui-left").await.unwrap();
+    assert_eq!(
+        first.members[0].update_at,
+        Some(instant("2026-11-14T11:30:00Z"))
+    );
+    assert_eq!(first.members[0].added_at, added_at);
+    let html = text(http(&app, "GET", left, Some(&publisher_cookie), false, &empty).await).await;
+    member = form(&html, &member_path);
+    member.insert("story".into(), "ui-article-2".into());
+    member.insert("unknown".into(), "yes".into());
+    member.insert(
+        "reason".into(),
+        "Add another development with unknown instant".into(),
+    );
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &member_path,
+            Some(&publisher_cookie),
+            true,
+            &member
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    let split_path = format!("{left}/split");
+    let html = text(http(&app, "GET", left, Some(&publisher_cookie), false, &empty).await).await;
+    let mut split = form(&html, &split_path);
+    split.insert("new_id".into(), "ui-split".into());
+    split.insert("title".into(), "Explicit separated subject".into());
+    split.insert("reason".into(), "Move only the selected development".into());
+    let selected = split
+        .iter()
+        .find(|(k, v)| k.starts_with("member_id_") && *v == "ui-article-2")
+        .unwrap()
+        .0
+        .trim_start_matches("member_id_")
+        .to_owned();
+    split.insert(format!("member_{selected}"), "yes".into());
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &split_path,
+            Some(&publisher_cookie),
+            true,
+            &split
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    assert_eq!(
+        service.get(&editor, "ui-left").await.unwrap().members.len(),
+        1
+    );
+    assert!(
+        service.get(&editor, "ui-split").await.unwrap().members[0]
+            .update_at
+            .is_none()
+    );
+    let action = service
+        .history(&editor, "ui-left", None, size(1))
+        .await
+        .unwrap()[0]
+        .id;
+    let undo_path = format!("/admin/editor/thread-actions/{action}");
+    let html = text(
+        http(
+            &app,
+            "GET",
+            &undo_path,
+            Some(&publisher_cookie),
+            false,
+            &empty,
+        )
+        .await,
+    )
+    .await;
+    let mut inverse = form(&html, &undo_path);
+    inverse.insert(
+        "reason".into(),
+        "Undo the exact split without changing article text".into(),
+    );
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &undo_path,
+            Some(&publisher_cookie),
+            true,
+            &inverse
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    assert_eq!(
+        service.get(&editor, "ui-left").await.unwrap().members.len(),
+        2
+    );
+    assert!(
+        service
+            .get(&editor, "ui-split")
+            .await
+            .unwrap()
+            .members
+            .is_empty()
+    );
+    let stale = http(
+        &app,
+        "POST",
+        &undo_path,
+        Some(&publisher_cookie),
+        true,
+        &inverse,
+    )
+    .await;
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    assert!(text(stale).await.contains("Undo the exact split"));
+    let remove_path = format!("{left}/remove");
+    let html = text(http(&app, "GET", left, Some(&publisher_cookie), false, &empty).await).await;
+    let mut remove = form(&html, &remove_path);
+    remove.insert("story".into(), "ui-article-2".into());
+    remove.insert(
+        "reason".into(),
+        "Remove only this primary relationship".into(),
+    );
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &remove_path,
+            Some(&publisher_cookie),
+            true,
+            &remove
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    let right = "/admin/editor/threads/ui-right";
+    let right_member = format!("{right}/member");
+    let html = text(http(&app, "GET", right, Some(&publisher_cookie), false, &empty).await).await;
+    let mut f = form(&html, &right_member);
+    f.insert("story".into(), "ui-article-3".into());
+    f.insert("unknown".into(), "yes".into());
+    f.insert(
+        "reason".into(),
+        "Prepare the explicit destination subject".into(),
+    );
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &right_member,
+            Some(&publisher_cookie),
+            true,
+            &f
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    let html = text(http(&app, "GET", right, Some(&publisher_cookie), false, &empty).await).await;
+    let mut occupied = form(&html, &right_member);
+    occupied.insert("story".into(), "ui-article-1".into());
+    occupied.insert("unknown".into(), "yes".into());
+    occupied.insert(
+        "reason".into(),
+        "Do not steal another primary subject".into(),
+    );
+    let conflict = http(
+        &app,
+        "POST",
+        &right_member,
+        Some(&publisher_cookie),
+        true,
+        &occupied,
+    )
+    .await;
+    assert_eq!(conflict.status(), StatusCode::CONFLICT);
+    let html = text(conflict).await;
+    assert!(html.contains("Ouvrir le suivi actuel de l’article choisi"));
+    assert!(html.contains("Suivi actuel : ui-left"));
+    assert_eq!(
+        service
+            .get(&editor, "ui-right")
+            .await
+            .unwrap()
+            .members
+            .len(),
+        1
+    );
+    assert_eq!(
+        service.get(&editor, "ui-left").await.unwrap().members[0].story_id,
+        "ui-article-1"
+    );
+    let preview_path = format!("{left}/merge-preview");
+    let html = text(http(&app, "GET", left, Some(&publisher_cookie), false, &empty).await).await;
+    let mut f = form(&html, &preview_path);
+    f.insert("target".into(), "ui-right".into());
+    f.insert(
+        "reason".into(),
+        "A human reviewed these two subject identities".into(),
+    );
+    let before = service.get(&editor, "ui-left").await.unwrap();
+    let preview = http(
+        &app,
+        "POST",
+        &preview_path,
+        Some(&publisher_cookie),
+        true,
+        &f,
+    )
+    .await;
+    assert_eq!(preview.status(), StatusCode::OK);
+    assert_eq!(
+        service.get(&editor, "ui-left").await.unwrap().version,
+        before.version
+    );
+    let merge_path = format!("{left}/merge");
+    let merge = form(&text(preview).await, &merge_path);
+    let mut wrong = merge.clone();
+    wrong.insert("target_version".into(), "0".into());
+    let invalid = http(
+        &app,
+        "POST",
+        &merge_path,
+        Some(&publisher_cookie),
+        true,
+        &wrong,
+    )
+    .await;
+    assert_eq!(invalid.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        form(&text(invalid).await, &merge_path)["target_version"],
+        "0"
+    );
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &merge_path,
+            Some(&publisher_cookie),
+            true,
+            &merge
+        )
+        .await
+        .status(),
+        StatusCode::SEE_OTHER
+    );
+    assert_eq!(
+        service
+            .get(&editor, "ui-left")
+            .await
+            .unwrap()
+            .merged_into
+            .as_deref(),
+        Some("ui-right")
+    );
+    assert_eq!(
+        service
+            .get(&editor, "ui-right")
+            .await
+            .unwrap()
+            .members
+            .len(),
+        2
+    );
+    stale_edit.insert("title".into(), "Own unsaved title".into());
+    stale_edit.insert("reason".into(), "Own private stale reason".into());
+    let stale = http(
+        &app,
+        "POST",
+        &format!("{left}/edit"),
+        Some(&publisher_cookie),
+        true,
+        &stale_edit,
+    )
+    .await;
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    let html = text(stale).await;
+    assert!(html.contains("Own unsaved title"));
+    assert!(html.contains("Own private stale reason"));
+    let action = service
+        .history(&editor, "ui-right", None, size(1))
+        .await
+        .unwrap()[0]
+        .id;
+    let undo_path = format!("/admin/editor/thread-actions/{action}");
+    let html = text(
+        http(
+            &app,
+            "GET",
+            &undo_path,
+            Some(&publisher_cookie),
+            false,
+            &empty,
+        )
+        .await,
+    )
+    .await;
+    let mut inverse = form(&html, &undo_path);
+    inverse.insert(
+        "reason".into(),
+        "This inverse must not overwrite a later title".into(),
+    );
+    let current = service.get(&editor, "ui-right").await.unwrap();
+    service
+        .edit(
+            &publisher,
+            "ui-right",
+            current.version,
+            "Concurrent title",
+            State::Active,
+            "A later deliberate edit",
+        )
+        .await
+        .unwrap();
+    let stale = http(
+        &app,
+        "POST",
+        &undo_path,
+        Some(&publisher_cookie),
+        true,
+        &inverse,
+    )
+    .await;
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    assert!(
+        text(stale)
+            .await
+            .contains("This inverse must not overwrite")
+    );
+    assert_eq!(
+        service.get(&editor, "ui-right").await.unwrap().title,
+        "Concurrent title"
+    );
+    inverse.insert("snapshot".into(), "{}".into());
+    assert_eq!(
+        http(
+            &app,
+            "POST",
+            &undo_path,
+            Some(&publisher_cookie),
+            true,
+            &inverse
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert!(public.resolve("ui-right").await.is_err());
     sqlx::query("UPDATE news.admin_users SET role='editor' WHERE id='thread-publisher'")
         .execute(&owner)
         .await

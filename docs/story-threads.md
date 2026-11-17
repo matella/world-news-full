@@ -126,3 +126,47 @@ Private story-title choices additionally need reviewed SELECT on story_revisions
 the disposable fixture demonstrates that read grant, without changing any live
 identity. No schema/dependency or HTTP curation/publication route is added by this
 model slice. See ADR 0025 and its evidence record; reader integration stays #39.
+
+## Protected human curation screens
+
+Open `/admin/editor/threads` from the private pipeline navigation. Editors can
+inspect all private/current subjects, including aliases and empty closed identities.
+Counts include private articles and must not be interpreted as anonymous reader
+counts. Publishers can create a stable identity with a one-line private reason.
+
+`/admin/editor/threads/{id}` presents current members and their explicit development
+instant separately from bookkeeping added_at. Canonical identities provide title/
+state, assign/date-correction, removal and subset-split forms. Story choices page
+without saving; lookup by stable article ID prepares the real selection without
+assigning it. A story assigned to another primary subject cannot be silently stolen.
+Use an explicit removal, split or merge decision with the appropriate version.
+Occupied selections show their current subject; a conflict links to that subject
+for inspection rather than moving its relationship implicitly.
+
+A date must contain an offset, for example `2026-11-14T10:00:00+01:00`, or the user
+must explicitly choose unknown and leave the date empty. The service stores UTC at
+microsecond precision. It never uses publication, fetch, request or added_at time
+as a substitute. Correcting/removing a relationship never edits or publishes prose.
+
+Split chooses an explicit nonempty subset and leaves members in the source. Merge
+first prepares two distinct active canonical identities, verifies the combined
+200-member bound and shows memberships/versions without mutation. Confirmation is
+a separate form with the destination fixed. Final merge rechecks both versions.
+The source becomes a preserved alias; its private page still exposes history and
+the destination link rather than hiding the old identity.
+
+Audit links open `/admin/editor/thread-actions/{action_id}`. Review the recorded
+before/after graph and reason. Article labels are current revision metadata, not
+historical prose snapshots. A publisher can request an inverse only while observed
+states still match; the service checks exact states/versions again under its graph
+transaction. A concurrent change rejects the inverse and preserves the submitted
+reason. Undoing creation/split leaves a closed empty identity; undoing an inverse
+can redo the earlier decision with new versions. Nothing resets versions or history.
+
+All mutations require live publisher permission at HTTP and service boundaries,
+CSRF and matching Origin. Strict form encoding and duplicate/unknown-field checks
+reject actor/snapshot/ready spoofing. Invalid/stale input is preserved for manual
+comparison with current data; expected versions do not refresh themselves. Closing
+or navigating away can lose unsaved fields; there is no durable autosave. No source
+HTTP or worker job runs. See ADR 0026 and its evidence. Complete editorial article
+publication acceptance remains #29; these screens expose no article-publish route.

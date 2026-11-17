@@ -174,6 +174,9 @@ def main():
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+threads_database)
             threads_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{threads_database}")
             cargo_suite("threads", threads_env)
+            if os.environ.get("WORLDNEWS_BROWSER_CHECK") == "1":
+                from test_threads import exercise as exercise_threads
+                exercise_threads(ROOT/"target/debug/world-news",f"postgres://fixture_thread_reader:synthetic-thread-reader@127.0.0.1:{port}/{threads_database}",f"postgres://fixture_thread_writer:synthetic-thread-writer@127.0.0.1:{port}/{threads_database}")
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+threads_database)
         if (ROOT/"backend/news/tests/admin_ui.rs").is_file():
             admin_database=database+"_admin_ui"
