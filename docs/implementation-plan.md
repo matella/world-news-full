@@ -228,3 +228,14 @@ unknown instant without inventing one. Known callers use Some; None stays unknow
 through versioned corrections and undo/redo. See ADR 0025 and docs/story-threads.md.
 No schema/dependency or curation/publication HTTP endpoint is added. Full audited
 curation forms and complete article publication acceptance remain open.
+
+## Audited thread curation interface
+
+PR #82 is merged at 79abd5157c100017a60852a193d170af0afefa6b after all workflows
+passed. The next #29 slice wires private thread navigation and explicit publisher
+creation/edit/member/removal/split/merge/inverse forms into the existing service.
+Known/unknown time choices do not manufacture recency. Merge has a distinct
+nonpersistent review step; inverses are exact-state fenced and stale reasons stay
+recoverable. See ADR 0026 and docs/story-threads.md. No direct graph SQL, source
+HTTP, schema/dependency or article-publication endpoint is introduced. Complete
+prepublication/review/publish/correct/withdraw acceptance still remains open.

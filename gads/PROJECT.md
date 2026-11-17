@@ -235,3 +235,15 @@ Some is known at microsecond precision, None is explicitly unknown. Future forms
 must require a known/unknown decision. Never manufacture dates from added_at,
 publication/feed/request times or undo. Preserve bookkeeping and monotonic history.
 Full #29 curation/publication interface acceptance remains open.
+
+## Human thread curation
+
+Use docs/story-threads.md and ADR 0026. Private forms call Threads services only;
+never write graph tables directly or infer subjects from titles/legacy hints. Live
+publisher/version/reason/CSRF/Origin fences apply to every mutation. Require an
+explicit known/unknown instant and preserve bookkeeping. Lookup/paging/merge
+preparation are nonpersistent; final merge checks both prepared identities/versions.
+Inverse forms accept recorded fences, never caller snapshots/ready flags, and undo
+rechecks exact states. Preserve submitted recovery input without advancing fences.
+Private aliases/history remain inspectable; old identity/audit data is never deleted.
+Article publication/correction/withdrawal acceptance remains a separate #29 gate.
