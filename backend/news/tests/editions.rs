@@ -471,6 +471,61 @@ async fn edition_drafts_fence_selection_preserve_history_and_never_publish() {
             .iter()
             .any(|w| w.kind == WarningKind::PublicationTimezone)
     );
+    // A real import event records bookkeeping, not the original publication instant.
+    let plan = world_news::legacy::plan_bytes(
+        include_bytes!("../../../fixtures/legacy-stories.json"),
+        "Europe/Brussels",
+    )
+    .unwrap();
+    assert_eq!(
+        world_news::legacy::apply(&owner, &plan)
+            .await
+            .unwrap()
+            .inserted,
+        3
+    );
+    let (legacy_revision, legacy_version): (String, i64) = sqlx::query_as(
+        "SELECT published_revision_id,lock_version FROM news.stories WHERE id='legacy-a'",
+    )
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    let legacy_head = drafts
+        .create(
+            &session,
+            "2026-11-19".parse().unwrap(),
+            "PRIVATE-LEGACY-SELECTION",
+        )
+        .await
+        .unwrap();
+    drafts
+        .save(
+            &session,
+            &legacy_head.id,
+            1,
+            &[EntryInput {
+                story_id: "legacy-a".into(),
+                revision_id: legacy_revision,
+                section: "international".into(),
+                expected_story_version: legacy_version,
+            }],
+            Some("legacy-a"),
+            "PRIVATE-EXPLICIT-LEGACY-SELECTION",
+        )
+        .await
+        .unwrap();
+    let legacy = drafts.get(&session, &legacy_head.id).await.unwrap();
+    assert!(
+        legacy
+            .preview
+            .warnings
+            .iter()
+            .any(|w| w.kind == WarningKind::UnknownPublicationTime)
+    );
+    assert!(!legacy.preview.warnings.iter().any(|w| matches!(
+        w.kind,
+        WarningKind::StalePublication | WarningKind::FuturePublication
+    )));
     // The draft writer receives no edition-publication column authority.
     assert!(
         sqlx::query("UPDATE news.editions SET state='published',published_at=now() WHERE id=$1")

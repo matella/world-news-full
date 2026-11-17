@@ -269,7 +269,7 @@ impl Drafts {
             .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<_, _>>()?;
-        let instants:Vec<(String,Option<DateTime<Utc>>)>=sqlx::query_as("SELECT revision_id,min(created_at) FROM news.publication_events WHERE revision_id=ANY($1) AND action IN ('published','corrected','imported') GROUP BY revision_id")
+        let instants:Vec<(String,Option<DateTime<Utc>>)>=sqlx::query_as("SELECT revision_id,min(created_at) FROM news.publication_events WHERE revision_id=ANY($1) AND action IN ('published','corrected') GROUP BY revision_id")
             .bind(&ids).fetch_all(&mut **tx).await.map_err(|e|AppError::database("edition_publication_times",e))?;
         let selected: Vec<_> = entries
             .iter()

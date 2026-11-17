@@ -285,3 +285,7 @@ never reset published snapshots or silently refresh a stale selection. Keep
 previews bounded by entry count and aggregate body bytes before decoding. Schema
 19 requires a matching binary even with unchanged public views/grants; no live
 migration or grant follows from test fixtures. #30/#31 UI/publication gates remain.
+
+Edition publication-age observations must exclude `imported` event timestamps:
+they record import bookkeeping. An import-only revision retains an unknown
+original publication instant; do not turn a fresh import into fresh coverage.

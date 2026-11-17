@@ -76,3 +76,8 @@ Migration 19 adds version/fence fields and private immutable history, without
 rewriting existing memberships or public grants. Schema-18 binaries refuse it;
 rollback needs a schema-19-compatible image or a separately verified restore plan.
 See ADR 0029. No live migration or runtime grant is authorised by fixture setup.
+
+Import events record import bookkeeping, not original publication instants. Only
+explicit `published`/`corrected` revision events supply publication age; an
+import-only revision remains unknown even when the import event has a recent
+created_at. Do not substitute edition dates or revision creation times.

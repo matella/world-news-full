@@ -63,3 +63,16 @@ guard, followed by `cargo fmt --all -- --check`,
 `cargo build -p world-news --locked` and `python3 scripts/test_rust_runtime.py`.
 All passed. Staged foundation/deployment-policy/secret/diff guards passed. GitHub
 workspace/database/frontend/persistence checks remain required before merge.
+
+Further premerge review found that imported publication-event created_at is the
+import bookkeeping clock, not original publication. The query now excludes imported
+events from age calculation. A new integration case runs the real legacy importer,
+selects its actual revision/version and requires unknown publication time, without
+stale/future factual freshness claims. This follow-up is verified before updating
+the open PR head; the earlier counts above precede this final semantic correction.
+
+The import-time correction passed the focused restricted-writer integration, then
+the entire 21-suite PostgreSQL/eight-Chromium runner, then final fmt, 61 unit tests,
+strict all-target Clippy, build and process-runtime checks. All passed on the
+corrected source before the PR branch update. The real import fixture retains
+unknown publication age instead of using the import clock.

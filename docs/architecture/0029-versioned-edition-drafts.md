@@ -55,3 +55,8 @@ Protected draft browsing/story choices, nonpersistent selection UI, explicit
 publisher edition publication, snapshot/removal policy and full reader notices
 remain #30/#31. These are separate gates; do not close either issue on this service
 slice. See docs/edition-composition.md and its service evidence.
+
+Import events record import bookkeeping, not original publication instants. Only
+explicit `published`/`corrected` revision events supply publication age; an
+import-only revision remains unknown even when the import event has a recent
+created_at. Do not substitute edition dates or revision creation times.
