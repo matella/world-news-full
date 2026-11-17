@@ -252,3 +252,17 @@ public-notice view and requires a compatible rollback binary. See ADR 0027 and
 docs/editorial-workflow.md. Focused restricted HTTP and separate-role Chromium
 journeys passed; full regression and PR gates are recorded in the evidence before
 merge/issue closure. No live migration, release or article publication occurred.
+
+## Edition preparation model
+
+PR #84 is merged at 13ab2ed525e545fa0fae938ce71bd133f9a5eb4f after all workflows
+passed (Application 44181046899, Foundation/GADS 44181046647, Deployment policy
+44181046745), and #29 is closed. Its complete local evidence is 55 unit tests,
+20 disposable DB suites and eight Chromium flows; no live release was performed.
+
+The next #30 slice adds bounded nonpersistent order/lead/section preparation,
+combined word-v1 reading estimates and explicit duplicate/classification/section/
+publication-age warnings. Configurable edition targets have strict startup checks
+and remain separate from article-length assessment fingerprints. See ADR 0028 and
+docs/edition-composition.md. This is a model slice: no edition draft writes,
+interface, automatic article publication or live release; #30/#31 stay open.

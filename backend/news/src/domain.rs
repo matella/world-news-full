@@ -18,6 +18,28 @@ pub struct Formats {
     pub analysis: WordBudget,
 }
 
+/// Edition composition guidance; warnings never rewrite or automatically publish content.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditionPolicy {
+    pub min_stories: u32,
+    pub max_stories: u32,
+    pub stale_after_hours: u32,
+    pub max_section_share_percent: u32,
+    pub required_sections: Vec<String>,
+}
+impl Default for EditionPolicy {
+    fn default() -> Self {
+        Self {
+            min_stories: 3,
+            max_stories: 12,
+            stale_after_hours: 48,
+            max_section_share_percent: 60,
+            required_sections: vec![],
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditorialPolicy {
@@ -31,6 +53,8 @@ pub struct EditorialPolicy {
     pub language_formats: BTreeMap<String, Formats>,
     pub reading_words_per_minute: u32,
     pub edition_target_minutes: u32,
+    #[serde(default)]
+    pub edition: EditionPolicy,
     pub length_override_requires_reason: bool,
     pub ai_drafting_enabled: bool,
     pub automatic_publication_enabled: bool,
@@ -73,6 +97,26 @@ impl EditorialPolicy {
         }
         if policy.reading_words_per_minute == 0 || policy.edition_target_minutes == 0 {
             return Err("Reading and edition budgets must be positive");
+        }
+        let edition = &policy.edition;
+        let mut sections = std::collections::BTreeSet::new();
+        if edition.min_stories == 0
+            || edition.max_stories < edition.min_stories
+            || edition.max_stories > 100
+            || edition.stale_after_hours == 0
+            || edition.stale_after_hours > 8760
+            || !(1..=100).contains(&edition.max_section_share_percent)
+            || edition.required_sections.len() > 20
+            || edition.required_sections.iter().any(|s| {
+                s.is_empty()
+                    || s.len() > 40
+                    || !s
+                        .bytes()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+                    || !sections.insert(s)
+            })
+        {
+            return Err("Invalid edition composition guidance");
         }
         if policy.language_formats.len() > 20
             || policy
