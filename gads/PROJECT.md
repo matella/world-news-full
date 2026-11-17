@@ -115,7 +115,8 @@ prose/sourcing/exact citation versions and reset review; prose changes do not in
 exceptions. Recheck current policy/counts and required reasons at publication; no
 reason rescues zero-word content. Public reasons are intentionally public, actor and
 revision-change notes are not. Private counter/range forms use existing role/session/
-version/CSRF/Origin checks. Complete article editing/publication UI remains #29.
+version/CSRF/Origin checks. The complete manual workflow is documented in
+docs/editorial-workflow.md (#29).
 
 Private workbench reads use live sessions and bounded keyset pages; do not replace
 missing revision data with successful empty content. Evidence proposals from a
@@ -124,7 +125,8 @@ versions until an explicit refresh; omitted binding versions capture current sta
 Text corrections retain original provenance and parent identity but replace sourcing
 and length assessment. Genuine archive edits retain historical kind/import lineage;
 never create a fake import or silently relabel an archive as new reporting. See
-docs/editor-workbench.md. The complete #29 UI and publication journey remain open.
+docs/editor-workbench.md and the completed manual article workflow in
+docs/editorial-workflow.md (#29).
 
 ## Commands and evidence
 
@@ -188,8 +190,8 @@ Use docs/editor-authoring.md and ADR 0021. Preview/add are nonpersistent; save i
 private versioned candidate. Preserve submitted text, stable claim IDs and genuine
 historical lineage; require explicit deletion. Text changes do not inherit source
 packages or length exceptions. Scope the larger body bound to editor paths, reject
-malformed form encoding and reauthorise conflict recovery. No HTTP publication is
-authorised by this authoring slice; complete #29 source/curation/workflow gates first.
+malformed form encoding and reauthorise conflict recovery. Body authoring remains
+private; use the separate completed #29 workflow for review and publication.
 
 ## Private source selection
 
@@ -198,8 +200,8 @@ explicit source-only revision save. Preserve actual frozen proof versions; chang
 a document requires explicit current capture. Never manufacture human methods or
 infer proof from metadata. Separate public attribution/limits from private notes.
 Bound document/claim choices while retaining current selections, reject stale saves
-and preserve submitted recovery input. Source forms add no HTTP publication gate
-bypass; publisher origin/thread controls and full #29 acceptance remain required.
+and preserve submitted recovery input. Source forms cannot bypass the manual
+publication checks; use the completed #29 workflow and publisher origin/thread controls.
 
 ## Article-origin controls
 
@@ -210,7 +212,7 @@ live role/CSRF/Origin checks. Choice paging is nonpersistent; stale/invalid save
 preserve private input only after reauthorisation. Never copy old private notes
 into automatic human attestations, refresh existing citations implicitly or expose
 private proof/actors through reader views. Registry/thread administration and full
-publication acceptance remain #29 gates; this screen does not publish articles.
+publication controls are integrated under #29; this screen does not publish articles.
 
 ## Origin registry administration
 
@@ -222,7 +224,8 @@ reads; never expose notes/actors as public DTOs. Retire configuration instead of
 deleting identity/history. Strict bounded forms preserve validation/stale input
 only after reauthorisation. Keep leading textarea newlines and distinguish an
 input’s prepared proof version from the latest stored version. No live grants are
-authorised by test fixture grants or source merges; full #29 acceptance stays open.
+authorised by test fixture grants or source merges. The #29 manual workflow has
+its recorded acceptance; edition UI/publication #30/#31 remain separate gates.
 
 ## Private thread workbench and unknown instants
 
@@ -234,7 +237,7 @@ undo always rechecks exact states/versions transactionally. MemberInput.update_a
 Some is known at microsecond precision, None is explicitly unknown. Future forms
 must require a known/unknown decision. Never manufacture dates from added_at,
 publication/feed/request times or undo. Preserve bookkeeping and monotonic history.
-Full #29 curation/publication interface acceptance remains open.
+The #29 curation/manual publication acceptance is recorded in its workflow evidence.
 
 ## Human thread curation
 
@@ -246,9 +249,14 @@ preparation are nonpersistent; final merge checks both prepared identities/versi
 Inverse forms accept recorded fences, never caller snapshots/ready flags, and undo
 rechecks exact states. Preserve submitted recovery input without advancing fences.
 Private aliases/history remain inspectable; old identity/audit data is never deleted.
-Article publication/correction/withdrawal acceptance remains a separate #29 gate.
+Article publication/correction/withdrawal uses the completed manual workflow (#29),
+separately from thread changes.
 
 ## Manual editorial publication
+
+Integration checkpoint: #77–#84 are merged and #29 is closed after its complete
+recorded author/review/publish/correct/withdraw acceptance. This is source integration,
+not a live release. Keep all domain/access checks below and the manual release hold.
 
 Use docs/editorial-workflow.md and ADR 0027. Complete source/length/editor acceptance
 must pass before merging the article workflow. Native transitions call the existing
@@ -271,7 +279,7 @@ never origin-count ranking or invented relevance/balance scores. Aggregate body
 counts and round once; withhold numeric whole-edition estimates when any language
 count is approximate. Unknown publication instants remain unknown, and publication
 age is not factual freshness. Edition guidance must not change article-length
-assessment fingerprints. The versioned draft/interface/transactional publication
+assessment fingerprints. Protected composition forms, transactional publication
 and historical removal policies remain #30/#31 gates. No model call publishes.
 
 ## Versioned private edition drafts
@@ -289,3 +297,14 @@ migration or grant follows from test fixtures. #30/#31 UI/publication gates rema
 Edition publication-age observations must exclude `imported` event timestamps:
 they record import bookkeeping. An import-only revision retains an unknown
 original publication instant; do not turn a fresh import into fresh coverage.
+
+## Private edition navigation and preparation
+
+Follow ADR 0030. Bound edition cards and current-publication choices; retain selected
+private/withdrawn identities with explicit unknown fields. Current choice metadata
+never overwrites prepared revision/version fences or invents a public candidate.
+Nonpersistent preview validates revision ownership and keeps duplicate/stale own
+input visible without business-data writes. Final save rechecks live session and
+all publication/version constraints. Use actual taxonomy/format/nature and exclude
+import clocks from original publication age. Native UI and #31 publication remain
+separate gates; no read observation confers permission.

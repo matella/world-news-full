@@ -280,3 +280,18 @@ use actual revision content/publication-event instants and an 8 MiB body bound.
 See ADR 0029 and docs/edition-composition.md. Migration 19 changes private version/
 audit data only and requires a compatible binary. Protected UI and transactional
 edition publication remain #30/#31; no HTTP endpoint or live operation is added.
+
+## Private edition workbench preparation
+
+PR #86 merged at c1a1fb5917aaf03ebd284c92ccd1343fbe1d959e after Application
+44187587185, Foundation/GADS 44187587134 and Deployment policy 44187587156 passed.
+Final local evidence is 61 unit tests, 21 DB suites and eight Chromium flows,
+including real legacy import with unknown original publication time.
+
+The next #30 slice adds bounded live-session edition cards, current-publication
+choices with retained selected identities, and nonpersistent own-input previews.
+It distinguishes private/withdrawn/stale selections and actual versus unknown
+publication metadata without refreshing captured fences or writing edition state.
+See ADR 0030 and docs/edition-composition.md. Native composition forms/browser
+acceptance and transactional snapshot publication remain #30/#31. No schema,
+HTTP endpoint, dependency or live operation is introduced.

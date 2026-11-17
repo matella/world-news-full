@@ -355,3 +355,6 @@ async fn audit(
         .execute(&mut **tx).await.map_err(|e|AppError::database("edition_audit",e))?;
     Ok(())
 }
+
+mod workbench;
+pub use workbench::{Card, Cards, Choice, Choices, Cursor, Filter};
