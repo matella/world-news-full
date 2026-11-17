@@ -1,7 +1,7 @@
 # Edition composition guidance
 
-Related: #30, #31, #24; ADR 0028. The Rust preparation model is implemented; the
-protected edition draft/selection interface and publication service remain pending.
+Related: #30, #31, #24; ADR 0028. The Rust preparation model and private draft service are implemented; the
+protected selection interface and edition publication command remain pending.
 This page describes observations, not an available publication command.
 
 An edition uses an explicit sequence of selected article revisions and one chosen
@@ -48,3 +48,36 @@ Anonymous reading, existing imported editions, article publication and edition
 snapshots are unchanged by this model. There is no schema migration, source HTTP,
 AI call, scheduling or live release. To roll back to an older binary, restore its
 matching policy file because it rejects the new unknown `edition` key.
+
+## Private draft service
+
+`editions::drafts::Drafts` creates an edition for the configured date/timezone
+identity and saves an explicit sequence of current published revisions. New dates
+must use years 0001–9999, matching canonical public routes. Every call
+revalidates the live editorial session; saves require expected edition and story
+versions. This initial service selects actual publications. A ready private article
+must first be explicitly published through the separate article workflow; selecting
+it never publishes it automatically.
+
+Saving replaces membership and records an immutable private before/after journal
+in one transaction. Duplicate entries, stale versions, withdrawn/private stories,
+invalid section choices and timezone drift leave the old draft intact. A private
+draft can be empty or lack a lead, with explicit preparation warnings. Published
+editions cannot be edited. No public edition is created by these calls.
+
+Reads preserve saved revision/order/fences and warn when a story has changed since
+preparation. Imported memberships retain unknown preparation versions; the service
+does not fabricate them. History pages contain at most 20 actions. The workbench
+caps selection at 100 stories and aggregate JSON body text at 8 MiB before decoding;
+large stored bodies fail explicitly without truncation. Existing public archive
+reads are unchanged by these private bounds.
+
+Migration 19 adds version/fence fields and private immutable history, without
+rewriting existing memberships or public grants. Schema-18 binaries refuse it;
+rollback needs a schema-19-compatible image or a separately verified restore plan.
+See ADR 0029. No live migration or runtime grant is authorised by fixture setup.
+
+Import events record import bookkeeping, not original publication instants. Only
+explicit `published`/`corrected` revision events supply publication age; an
+import-only revision remains unknown even when the import event has a recent
+created_at. Do not substitute edition dates or revision creation times.

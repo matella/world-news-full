@@ -94,6 +94,12 @@ def main():
                 from test_workflow import exercise as exercise_workflow
                 exercise_workflow(ROOT/"target/debug/world-news",f"postgres://fixture_workflow_reader:synthetic-workflow-reader@127.0.0.1:{port}/{workflow_database}",f"postgres://fixture_workflow_writer:synthetic-workflow-writer@127.0.0.1:{port}/{workflow_database}")
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+workflow_database)
+        if (ROOT/"backend/news/tests/editions.rs").is_file():
+            edition_database=database+"_editions"
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+edition_database)
+            edition_env=dict(env,WORLDNEWS_TEST_DATABASE_URL=f"postgres://postgres:synthetic-schema-only@127.0.0.1:{port}/{edition_database}")
+            cargo_suite("editions",edition_env)
+            run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","DROP DATABASE "+edition_database)
         if (ROOT/"backend/news/tests/registry.rs").is_file():
             registry_database=database+"_registry"
             run("exec",name,"psql","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-c","CREATE DATABASE "+registry_database)

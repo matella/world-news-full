@@ -266,3 +266,17 @@ publication-age warnings. Configurable edition targets have strict startup check
 and remain separate from article-length assessment fingerprints. See ADR 0028 and
 docs/edition-composition.md. This is a model slice: no edition draft writes,
 interface, automatic article publication or live release; #30/#31 stay open.
+
+## Private edition draft persistence
+
+PR #85 merged at 278fc597e6702853d2c52fc205ff5c2a62cf007f after Application
+44182691419, Foundation/GADS 44182691298 and Deployment policy 44182691578 passed.
+
+The next #30 slice persists explicit current-publication selections with live
+editor sessions, edition/story fences, stable lock ordering, atomic replacement
+and immutable private before/after history. Existing imported memberships retain
+unknown fences; existing published editions remain immutable. Selection previews
+use actual revision content/publication-event instants and an 8 MiB body bound.
+See ADR 0029 and docs/edition-composition.md. Migration 19 changes private version/
+audit data only and requires a compatible binary. Protected UI and transactional
+edition publication remain #30/#31; no HTTP endpoint or live operation is added.

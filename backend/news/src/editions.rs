@@ -20,6 +20,8 @@ pub struct Selection<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WarningKind {
     Empty,
+    StaleSelection,
+    PublicationTimezone,
     StoryTarget,
     ReadingTarget,
     MissingLead,
@@ -468,3 +470,5 @@ mod tests {
         }
     }
 }
+
+pub mod drafts;
