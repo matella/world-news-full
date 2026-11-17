@@ -24,3 +24,5 @@ pub mod sourcing;
 pub mod citations;
 
 pub mod length;
+
+pub mod editions;

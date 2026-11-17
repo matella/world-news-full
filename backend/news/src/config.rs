@@ -103,6 +103,15 @@ impl Config {
         let database_url = get("DATABASE_URL").ok_or("DATABASE_URL is required")?;
         let database = Self::connection(&database_url, production)?;
         let editorial = Self::editorial_from_lookup(&get)?;
+        let taxonomy = Self::taxonomy_from_lookup(&get)?;
+        if editorial
+            .edition
+            .required_sections
+            .iter()
+            .any(|id| taxonomy.fallback.id != *id && !taxonomy.sections.iter().any(|s| s.id == *id))
+        {
+            return Err("Edition policy refers to an unknown section");
+        }
         let editor_database = match get("NEWS_ADMIN_ENABLED").as_deref().unwrap_or("false") {
             "false" => None,
             "true" => {
@@ -139,7 +148,7 @@ impl Config {
             public_url,
             masthead,
             editorial,
-            taxonomy: Self::taxonomy_from_lookup(&get)?,
+            taxonomy,
             database: database.disable_statement_logging(),
             editor_database,
         })
@@ -395,6 +404,12 @@ mod editorial_policy_tests {
                 .brief
                 .max_words,
             140
+        );
+        policy.edition.required_sections = vec!["not-a-configured-section".into()];
+        std::fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        assert_eq!(
+            Config::from_lookup(get).unwrap_err(),
+            "Edition policy refers to an unknown section"
         );
         std::fs::write(&path, " ".repeat(65537)).unwrap();
         assert_eq!(

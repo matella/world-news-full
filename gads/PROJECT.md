@@ -261,3 +261,15 @@ Migration 18 retains public-notice columns/grants and adds initial publication
 reasons; schema-17 binaries refuse it. Do not deploy an incompatible rollback or
 apply live migrations without the concrete approved release plan. Edition
 composition, translation and reader parity remain separately tracked gates.
+
+## Edition composition observations
+
+Use ADR 0028 and docs/edition-composition.md. Preparation preserves explicit order,
+lead and configured section choices; counts/warnings never grant publication
+permission. Use actual immutable article format/nature and citation projections,
+never origin-count ranking or invented relevance/balance scores. Aggregate body
+counts and round once; withhold numeric whole-edition estimates when any language
+count is approximate. Unknown publication instants remain unknown, and publication
+age is not factual freshness. Edition guidance must not change article-length
+assessment fingerprints. The versioned draft/interface/transactional publication
+and historical removal policies remain #30/#31 gates. No model call publishes.

@@ -11,6 +11,13 @@
   },
   "reading_words_per_minute": 200,
   "edition_target_minutes": 10,
+  "edition": {
+    "min_stories": 3,
+    "max_stories": 12,
+    "stale_after_hours": 48,
+    "max_section_share_percent": 60,
+    "required_sections": ["belgium", "international"]
+  },
   "length_override_requires_reason": true,
   "ai_drafting_enabled": false,
   "automatic_publication_enabled": false
